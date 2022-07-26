@@ -32,13 +32,24 @@ fn buildLibrary(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeOb
         "deps/imgui/imgui_tables.cpp",
         "deps/imgui/imgui_widgets.cpp",
         "deps/imgui/imgui_demo.cpp",
-        //"deps/imgui/backends/imgui_impl_glfw.cpp",
-        //"deps/imgui/backends/imgui_impl_opengl3.cpp",
         }, &[_][]const u8{});
+
+    step.defineCMacro("IMGUI_DISABLE_OBSOLETE_KEYIO", null);
+    step.defineCMacro("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", null);
 
     lib.linkLibCpp();
     lib.addIncludeDir("deps/imgui");
 
     lib.install();
     return lib;
+}
+
+fn addBackendGlfwOpenGl3(exe: *std.build.LibExeObjStep) void {
+    exe.addCSourceFiles(&[_][]const u8{
+        "deps/imgui/backends/imgui_impl_glfw.cpp",
+        "deps/imgui/backends/imgui_impl_opengl3.cpp",
+        }, &[_][]const u8{});
+
+    exe.linkLibCpp();
+    exe.addIncludeDir("deps/imgui");
 }
