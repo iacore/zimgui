@@ -12,10 +12,9 @@ pub fn build(b: *Builder) void {
     test_step.dependOn(&main_tests.step);
 }
 
-pub fn link(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeObjStep {
+pub fn link(b: *Builder, step: *std.build.LibExeObjStep) void {
     const lib = buildLibrary(b, step);
     step.linkLibrary(lib);
-    return lib;
 }
 
 fn buildLibrary(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeObjStep {
@@ -46,6 +45,7 @@ fn buildLibrary(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeOb
 
 fn addBackendGlfwOpenGl3(exe: *std.build.LibExeObjStep) void {
     exe.addCSourceFiles(&[_][]const u8{
+        "src/backend_glfw_opengl3.zig",
         "deps/imgui/backends/imgui_impl_glfw.cpp",
         "deps/imgui/backends/imgui_impl_opengl3.cpp",
         }, &[_][]const u8{});
