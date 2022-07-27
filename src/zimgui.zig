@@ -10,8 +10,9 @@ pub const Context = struct {
     data: *anyopaque,
 
     pub fn init() Context {
-        return .Context{.data = ImGui_CreateContext(null)};
+        return Context{.data = ImGui_CreateContext(null)};
     }
+    extern fn ImGui_CreateContext(shared_font_atlas: ?*anyopaque) *anyopaque;
 
     // TODO cgustafsson:
     pub fn initWithFontAtlas() Context {
@@ -21,6 +22,7 @@ pub const Context = struct {
     pub fn deinit(context: Context) void {
         ImGui_DestoryContext(context.data);
     }
+    extern fn ImGui_DestoryContext(context: *anyopaque) void;
 
     pub fn deinitCurrent() void {
         ImGui_DestoryContext(null);
@@ -29,14 +31,11 @@ pub const Context = struct {
     pub fn current() Context {
         return Context{.data = ImGui_GetCurrentContext()};
     }
+    extern fn ImGui_GetCurrentContext() *anyopaque;
 
     pub fn setCurrent(context: Context) void {
         ImGui_SetCurrentContext(context.data);
     }
-
-    extern fn ImGui_CreateContext(shared_font_atlas: *anyopaque) *anyopaque;
-    extern fn ImGui_DestoryContext(context: *anyopaque) void;
-    extern fn ImGui_GetCurrentContext() *anyopaque;
     extern fn ImGui_SetCurrentContext(context: *anyopaque) void;
 };
 
@@ -68,14 +67,20 @@ pub fn text(txt: [*c]const u8) void {
 }
 pub extern fn ImGui_Text(fmt: [*c]const u8) void;
 
-// @param wrap_width Use -1.0 as ignore wrap width.
-pub fn calcTextSize(txt: [*c]const u8, wrap_width: f32) Vec2 {
-    return ImGui_CalcTextSize(txt, text.len, wrap_width);
+pub const kNoWrap: f32 = -1.0;
+
+// @param wrap_width Use kNoWrap to ignore word wrap.
+pub fn calcTextSize(txt: []const u8, wrap_width: f32) Vec2 {
+    return ImGui_CalcTextSize(@ptrCast([*c]const u8, txt), txt.len, wrap_width);
 }
 pub extern fn ImGui_CalcTextSize(text: [*c]const u8, text_len: usize, wrap_width: f32) Vec2;
 
-pub fn button(label: [*c]const u8, size: Vec2) bool {
-    return ImGui_Button(label, size);
+pub fn button(label: [*c]const u8, size: ?Vec2) bool {
+    if (size) |s| {
+        return ImGui_Button(label, s);
+    } else {
+        return ImGui_Button(label, Vec2{.x = 0, .y = 0});
+    }
 }
 pub extern fn ImGui_Button(label: [*c]const u8, size: Vec2) bool;
 
@@ -83,7 +88,7 @@ pub const DrawData = struct {
     data: *anyopaque,
 
     // valid after Render() and until the next call to newFrame(). this is what you have to render.
-    pub fn get() *DrawData {
+    pub fn get() DrawData {
         return DrawData{.data = ImGui_GetDrawData()};
     }
 
@@ -107,6 +112,8 @@ pub const Vec4 = extern struct {
     w: f32,
 };
 
+pub const IM_DRAWLIST_TEX_LINES_WIDTH_MAX = 63;
+
 // Load and rasterize multiple TTF/OTF fonts into a same texture. The font atlas will build a single texture holding:
 //  - One or more fonts.
 //  - Custom graphics data needed to render the shapes needed by Dear ImGui.
@@ -124,28 +131,78 @@ pub const Vec4 = extern struct {
 //   You can set font_cfg->FontDataOwnedByAtlas=false to keep ownership of your data and it won't be freed,
 // - Even though many functions are suffixed with "TTF", OTF data is supported just as well.
 // - This is an old API and it is currently awkward for those and and various other reasons! We will address them in the future!
-pub const FontAtlas = struct {
-    data: *anyopaque,
+pub const FontAtlas = extern struct {
+    Flags: FontAtlasFlags,              // Build flags (see ImFontAtlasFlags_)
+    TexID: *anyopaque,              // User data to refer to the texture once it has been uploaded to user's graphic systems. It is passed back to you during rendering via the ImDrawCmd structure.
+    TexDesiredWidth: c_int,    // Texture width desired by user before Build(). Must be a power-of-two. If have many glyphs your graphics API have texture size restrictions you may want to increase texture width to decrease height.
+    TexGlyphPadding: c_int,    // Padding between glyphs within texture in pixels. Defaults to 1. If your rendering method doesn't rely on bilinear filtering you may set this to 0 (will also need to set AntiAliasedLinesUseTex = false).
+    Locked: bool,             // Marked as Locked by ImGui::NewFrame() so attempt to modify the atlas will assert.
 
-    pub fn addFontFromFileTTF(font_atlas: *FontAtlas, filename: [*c]const u8, size_pixels: f32, font_cfg: FontConfig, glyph_ranges: *const u16) *Font {
-        return ImGui_FontAtlas_AddFontFromFileTTF(font_atlas.data, filename, size_pixels, font_cfg, glyph_ranges);
+    // [Internal]
+    // NB: Access texture data via GetTexData*() calls! Which will setup a default font for you.
+    TexReady: bool,           // Set when texture was built matching current font input
+    TexPixelsUseColors: bool, // Tell whether our texture data is known to use colors (rather than just alpha channel), in order to help backend select a format.
+    TexPixelsAlpha8: *u32,    // 1 component per pixel, each component is unsigned 8-bit. Total size = TexWidth * TexHeight
+    TexPixelsRGBA32: *u32,    // 4 component per pixel, each component is unsigned 8-bit. Total size = TexWidth * TexHeight * 4
+    TexWidth: c_int,           // Texture width calculated during Build().
+    TexHeight: c_int,          // Texture height calculated during Build().
+    TexUvScale: Vec2,         // = (1.0f/TexWidth, 1.0f/TexHeight)
+    TexUvWhitePixel: Vec2,    // Texture coordinates to a white pixel
+    Fonts: ImVector,              // Hold all the fonts returned by AddFont*. Fonts[0] is the default font upon calling ImGui::NewFrame(), use ImGui::PushFont()/PopFont() to change the current font.
+    CustomRects: ImVector,    // Rectangles for packing custom texture data into the atlas.
+    ConfigData: ImVector,         // Configuration data
+    TexUvLines: [IM_DRAWLIST_TEX_LINES_WIDTH_MAX + 1]Vec4,  // UVs for baked anti-aliased lines
+
+    // [Internal] Font builder
+    FontBuilderIO: *const anyopaque,      // Opaque interface to a font builder (default to stb_truetype, can be changed to use FreeType by defining IMGUI_ENABLE_FREETYPE).
+    FontBuilderFlags: u32,   // Shared flags (for all fonts) for custom font builder. THIS IS BUILD IMPLEMENTATION DEPENDENT. Per-font override is also available in ImFontConfig.
+
+    // [Internal] Packing data
+    PackIdMouseCursors: c_int, // Custom texture rectangle ID for white pixel and mouse cursors
+    PackIdLines: c_int,        // Custom texture rectangle ID for baked anti-aliased lines
+
+    pub fn addFontFromFileTTF(font_atlas: *FontAtlas, filename: [*c]const u8, size_pixels: f32, font_cfg: *FontConfig, glyph_ranges: *const u16) *Font {
+        return ImGui_FontAtlas_AddFontFromFileTTF(font_atlas, filename, size_pixels, font_cfg, glyph_ranges);
     }
+    extern fn ImGui_FontAtlas_AddFontFromFileTTF(font_atlas: *anyopaque, filename: [*c]const u8, size_pixels: f32, font_cfg: *FontConfig, glyph_ranges: *const u16) *Font;
+
+    pub fn clearFonts(font_atlas: *FontAtlas) void {
+        ImGui_FontAtlas_ClearFonts(font_atlas);
+    }
+    extern fn ImGui_FontAtlas_ClearFonts(font_atlas: *anyopaque) void;
 
     // Build pixels data. This is called automatically for you by the GetTexData*** functions.
-    pub fn build(font_atlas: FontAtlas) bool {
-        return ImGui_FontAtlas_Build(font_atlas.data);
+    pub fn build(font_atlas: *FontAtlas) bool {
+        return ImGui_FontAtlas_Build(font_atlas);
     }
+    extern fn ImGui_FontAtlas_Build(font_atlas: *anyopaque) bool;
+
+    // Helpers to retrieve list of common Unicode ranges (2 value per range, values are inclusive, zero-terminated list)
+    // NB: Make sure that your string are UTF-8 and NOT in your local code page. In C++11, you can create UTF-8 string literal using the u8"Hello world" syntax. See FAQ for details.
+    // NB: Consider using ImFontGlyphRangesBuilder to build glyph ranges from textual data.
+
+    
+    pub fn getGlyphRangesDefault(font_atlas: *FontAtlas) [*c]const u16 { // Basic Latin, Extended Latin
+        return ImGui_FontAtlas_GetGlyphRangesDefault(font_atlas);
+    }
+    extern fn ImGui_FontAtlas_GetGlyphRangesDefault(font_atlas: *anyopaque) [*c]const u16;
 
     // 4 bytes-per-pixel
-    // @param out_bytes_per_pixel Optional
-    pub fn getTexDataAsRGBA32(font_atlas: FontAtlas, out_pixels: *[*c]u8, out_width: *c_int, out_height: *c_int, out_bytes_per_pixel: *c_int) void {
-        ImGui_FontAtlas_GetTexDataAsRGBA32(font_atlas.data, out_pixels, out_width, out_height, out_bytes_per_pixel);
+    pub fn getTexDataAsRGBA32(font_atlas: *FontAtlas, out_pixels: *[*c]u8, out_width: *c_int, out_height: *c_int, out_bytes_per_pixel: *c_int) void {
+        ImGui_FontAtlas_GetTexDataAsRGBA32(font_atlas, out_pixels, out_width, out_height, out_bytes_per_pixel);
     }
-
-    pub extern fn ImGui_FontAtlas_Build(font_atlas: *anyopaque) bool;
-    pub extern fn ImGui_FontAtlas_AddFontFromFileTTF(font_atlas: *anyopaque, filename: [*c]const u8, size_pixels: f32, font_cfg: FontConfig, glyph_ranges: *const u16) *Font;
-    pub extern fn ImGui_FontAtlas_GetTexDataAsRGBA32(font_atlas: *anyopaque, out_pixels: *[*c]u8, out_width: *c_int, out_height: *c_int, out_bytes_per_pixel: *c_int) void;
+    extern fn ImGui_FontAtlas_GetTexDataAsRGBA32(font_atlas: *anyopaque, out_pixels: *[*c]u8, out_width: *c_int, out_height: *c_int, out_bytes_per_pixel: *c_int) void;
 };
+
+pub fn pushFont(font: *Font) void {
+    ImGui_PushFont(font);
+}
+extern fn ImGui_PushFont(*anyopaque) void;
+
+pub fn popFont() void {
+    ImGui_PopFont();
+}
+extern fn ImGui_PopFont() void;
 
 //-----------------------------------------------------------------------------
 // [SECTION] Font API (ImFontConfig, ImFontGlyph, ImFontAtlasFlags, ImFontAtlas, ImFontGlyphRangesBuilder, ImFont)
@@ -174,7 +231,10 @@ pub const FontConfig = extern struct {
     Name: [40]u8,               // Name (strictly to ease debugging)
     DstFont: *Font,
 
-    //IMGUI_API ImFontConfig();
+    pub fn init() FontConfig {
+        return ImGui_FontConfig_FontConfig();
+    }
+    extern fn ImGui_FontConfig_FontConfig() FontConfig;
 };
 
 pub const FontGlyph = extern struct {
@@ -248,6 +308,14 @@ pub const Font = extern struct {
     //IMGUI_API bool              IsGlyphRangeUnused(unsigned int c_begin, unsigned int c_last);
 };
 
+// Flags for ImFontAtlas build
+pub const FontAtlasFlags = enum(c_int) {
+    None               = 0,
+    NoPowerOfTwoHeight = 1 << 0,   // Don't round the height to next power of two
+    NoMouseCursors     = 1 << 1,   // Don't build software mouse cursors into the atlas (save a little texture memory)
+    NoBakedLines       = 1 << 2,   // Don't build thick line textures into the atlas (save a little texture memory, allow support for point/nearest filtering). The AntiAliasedLinesUseTex features uses them, otherwise they will be rendered using polygons (more expensive for CPU/GPU).
+};
+
 // Flags for ImGui::Begin()
 pub const WindowFlags = enum(c_int) {
     None                   = 0,
@@ -271,9 +339,12 @@ pub const WindowFlags = enum(c_int) {
     NoNavInputs            = 1 << 18,  // No gamepad/keyboard navigation within the window
     NoNavFocus             = 1 << 19,  // No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
     UnsavedDocument        = 1 << 20,  // Display a dot next to the title. When used in a tab/docking context, tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
-    NoNav                  = WindowFlags.NoNavInputs | WindowFlags.NoNavFocus,
-    NoDecoration           = WindowFlags.NoTitleBar | WindowFlags.NoResize | WindowFlags.NoScrollbar | WindowFlags.NoCollapse,
-    NoInputs               = WindowFlags.NoMouseInputs | WindowFlags.NoNavInputs | WindowFlags.NoNavFocus,
+    //NoNav                  = WindowFlags.NoNavInputs | WindowFlags.NoNavFocus,
+    NoNav = 1 << 18 | 1 << 19,
+    //NoDecoration           = WindowFlags.NoTitleBar | WindowFlags.NoResize | WindowFlags.NoScrollbar | WindowFlags.NoCollapse,
+    NoDecoration = 1 << 0 | 1 << 1 | 1 << 3 | 1 << 5,
+    //NoInputs               = WindowFlags.NoMouseInputs | WindowFlags.NoNavInputs | WindowFlags.NoNavFocus,
+    NoInputs = 1 << 9 | 1 << 18 | 1 << 19 ,
 
     // [Internal]
     NavFlattened           = 1 << 23,  // [BETA] On child window: allow gamepad/keyboard navigation to cross over parent border to this child or between sibling child windows.
@@ -435,7 +506,7 @@ pub const Style = extern struct {
     AntiAliasedFill: bool,            // Enable anti-aliased edges around filled shapes (rounded rectangles, circles, etc.). Disable if you are really tight on CPU/GPU. Latched at the beginning of the frame (copied to ImDrawList).
     CurveTessellationTol: f32,       // Tessellation tolerance when using PathBezierCurveTo() without a specific number of segments. Decrease for highly tessellated curves (higher quality, more polygons), increase to reduce quality.
     CircleTessellationMaxError: f32, // Maximum error (in pixels) allowed when using AddCircle()/AddCircleFilled() or drawing rounded corner rectangles with no explicit segment count specified. Decrease for higher quality but more geometry.
-    Colors: [Col.COUNT]Vec4,
+    Colors: [@enumToInt(Col.COUNT)]Vec4,
 
     //IMGUI_API ImGuiStyle();
     //IMGUI_API void ScaleAllSizes(float scale_factor);
@@ -555,12 +626,20 @@ pub const Key = enum(c_int) {
 
     // [Internal] Prior to 1.87 we required user to fill io.KeysDown[512] using their own native index + a io.KeyMap[] array.
     // We are ditching this method but keeping a legacy path for user code doing e.g. IsKeyPressed(MY_NATIVE_KEY_CODE)
-    NamedKey_BEGIN         = 512,
-    NamedKey_END           = Key.COUNT,
-    NamedKey_COUNT         = Key.NamedKey_END - Key.NamedKey_BEGIN,
-    KeysData_SIZE          = Key.NamedKey_COUNT,          // Size of KeysData[]: only hold named keys
-    KeysData_OFFSET        = Key.NamedKey_BEGIN,          // First key stored in io.KeysData[0]. Accesses to io.KeysData[] must use (key - KeysData_OFFSET).
+    // defined outside of enum due to https://github.com/ziglang/zig/issues/2115
+    //NamedKey_BEGIN         = 512,
+    //NamedKey_END           = Key.COUNT,
+    //NamedKey_COUNT         = Key.NamedKey_END - Key.NamedKey_BEGIN,
+    //KeysData_SIZE          = Key.NamedKey_COUNT,          // Size of KeysData[]: only hold named keys
+    //KeysData_OFFSET        = Key.NamedKey_BEGIN,          // First key stored in io.KeysData[0]. Accesses to io.KeysData[] must use (key - KeysData_OFFSET).
 };
+
+// enum(c_int) cannot have same values: https://github.com/ziglang/zig/issues/2115
+pub const Key_NamedKey_BEGIN: c_int = 512; // this clashes with Key.Tab, has to be defined outside enum
+pub const Key_NamedKey_END: c_int           = @enumToInt(Key.COUNT);
+pub const Key_NamedKey_COUNT: c_int         = Key_NamedKey_END - Key_NamedKey_BEGIN;
+pub const Key_KeysData_SIZE: c_int          = Key_NamedKey_COUNT;          // Size of KeysData[]: only hold named keys
+pub const Key_KeysData_OFFSET: c_int        = Key_NamedKey_BEGIN;          // First key stored in io.KeysData[0]. Accesses to io.KeysData[] must use (key - KeysData_OFFSET).
 
 pub const IO = extern struct {
     //------------------------------------------------------------------
@@ -613,13 +692,20 @@ pub const IO = extern struct {
     // Optional: Access OS clipboard
     // (default to use native Win32 clipboard on Windows, otherwise uses a private clipboard. Override to access OS clipboard on other architectures)
 
-    GetClipboardTextFn: GetClipboardTextFnDecl,
-    SetClipboardTextFn: SetClipboardTextFnDecl,
+    //extern fn SetClipboardTextFnDecl(user_data: *anyopaque, text: [*c]const u8) void;
+    //extern fn GetClipboardTextFnDecl(user_data: *anyopaque) [*c]const u8;
+    //extern fn SetPlatformImeDataFnDecl(viewport: *Viewport, data: *PlatformImeData) void;
+    
+    getClipboardTextFn: fn (*anyopaque, [*c]const u8) callconv(.C) void,
+    SetClipboardTextFn: fn (*anyopaque) callconv(.C) void,
+    //GetClipboardTextFn: GetClipboardTextFnDecl,
+    //SetClipboardTextFn: SetClipboardTextFnDecl,
     clipboard_user_data: *anyopaque,
 
     // Optional: Notify OS Input Method Editor of the screen position of your cursor for text input position (e.g. when using Japanese/Chinese IME on Windows)
     // (default to use native imm32 api on Windows)
-    SetPlatformImeDataFn: SetPlatformImeDataFnDecl,
+    setPlatformImeDataFn: fn (*Viewport, *PlatformImeData) callconv(.C) void,
+    //SetPlatformImeDataFn: SetPlatformImeDataFnDecl,
     _UnusedPadding: *anyopaque,                                     // Unused field to keep data structure the same size.
 
     //------------------------------------------------------------------
@@ -681,7 +767,7 @@ pub const IO = extern struct {
 
     // Other state maintained from data above + IO function calls
     key_mods: ModFlags,                          // Key mods flags (same as io.KeyCtrl/KeyShift/KeyAlt/KeySuper but merged into flags), updated by NewFrame()
-    KeysData: [Key.KeysData_SIZE]KeyData,  // Key state for all known keys. Use IsKeyXXX() functions to access this.
+    KeysData: [Key_KeysData_SIZE]KeyData,  // Key state for all known keys. Use IsKeyXXX() functions to access this.
     WantCaptureMouseUnlessPopupClose: bool,   // Alternative to WantCaptureMouse: (WantCaptureMouse == true && WantCaptureMouseUnlessPopupClose == false) when a click over void is expected to close a popup.
     MousePosPrev: Vec2,                       // Previous mouse position (note that MouseDelta is not necessary == MousePos-MousePosPrev, in case either position is invalid)
     MouseClickedPos: [5]Vec2,                 // Position at time of clicking
@@ -794,7 +880,7 @@ pub const cyan = Vec4{ .x = 0.16, .y = 0.63, .z = 0.60, .w = 1.00 };
 pub const green = Vec4{ .x = 0.52, .y = 0.60, .z = 0.00, .w = 1.00 };
 
 pub fn setImguiTheme() void {
-    var cl = Style.get().Colors;
+    var cl = &Style.get().Colors;
 
     // light:
     //  base 01 - emphasized content
@@ -802,57 +888,57 @@ pub fn setImguiTheme() void {
     //  base 1  - comments / secondary content
     //  base 2  - background highlights
     //  base 3  - background
-    cl[Col.Text] = base00;
-    cl[Col.TextDisabled] = base1;
-    cl[Col.WindowBg] = base3;
-    cl[Col.ChildBg] = base3;
-    cl[Col.PopupBg] = base3;
-    cl[Col.Border] = base2;
-    cl[Col.BorderShadow] = Vec4{ .x = 0.00, .y = 0.00, .z = 0.00, .w = 0.00 };
-    cl[Col.FrameBg] = base3;
-    cl[Col.FrameBgHovered] = base3;
-    cl[Col.FrameBgActive] = base3;
-    cl[Col.TitleBg] = base2;
-    cl[Col.TitleBgActive] = base2;
-    cl[Col.TitleBgCollapsed] = base3;
-    cl[Col.MenuBarBg] = base2;
-    cl[Col.ScrollbarBg] = Vec4{ .x = 0.98, .y = 0.98, .z = 0.98, .w = 0.53 };
-    cl[Col.ScrollbarGrab] = Vec4{ .x = 0.69, .y = 0.69, .z = 0.69, .w = 0.80 };
-    cl[Col.ScrollbarGrabHovered] = Vec4{ .x = 0.49, .y = 0.49, .z = 0.49, .w = 0.80 };
-    cl[Col.ScrollbarGrabActive] = Vec4{ .x = 0.49, .y = 0.49, .z = 0.49, .w = 1.00 };
-    cl[Col.CheckMark] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 1.00 };
-    cl[Col.SliderGrab] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.78 };
-    cl[Col.SliderGrabActive] = Vec4{ .x = 0.46, .y = 0.54, .z = 0.80, .w = 0.60 };
-    cl[Col.Button] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.40 };
-    cl[Col.ButtonHovered] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 1.00 };
-    cl[Col.ButtonActive] = Vec4{ .x = 0.06, .y = 0.53, .z = 0.98, .w = 1.00 };
-    cl[Col.Header] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.31 };
-    cl[Col.HeaderHovered] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.80 };
-    cl[Col.HeaderActive] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 1.00 };
-    cl[Col.Separator] = Vec4{ .x = 0.39, .y = 0.39, .z = 0.39, .w = 0.62 };
-    cl[Col.SeparatorHovered] = Vec4{ .x = 0.14, .y = 0.44, .z = 0.80, .w = 0.78 };
-    cl[Col.SeparatorActive] = Vec4{ .x = 0.14, .y = 0.44, .z = 0.80, .w = 1.00 };
-    cl[Col.ResizeGrip] = Vec4{ .x = 0.35, .y = 0.35, .z = 0.35, .w = 0.17 };
-    cl[Col.ResizeGripHovered] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.67 };
-    cl[Col.ResizeGripActive] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.95 };
-    cl[Col.Tab] = Vec4{ .x = 0.76, .y = 0.80, .z = 0.84, .w = 0.93 };
-    cl[Col.TabHovered] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.80 };
-    cl[Col.TabActive] = Vec4{ .x = 0.60, .y = 0.73, .z = 0.88, .w = 1.00 };
-    cl[Col.TabUnfocused] = Vec4{ .x = 0.92, .y = 0.93, .z = 0.94, .w = 0.99 };
-    cl[Col.TabUnfocusedActive] = Vec4{ .x = 0.74, .y = 0.82, .z = 0.91, .w = 1.00 };
-    cl[Col.PlotLines] = Vec4{ .x = 0.39, .y = 0.39, .z = 0.39, .w = 1.00 };
-    cl[Col.PlotLinesHovered] = Vec4{ .x = 1.00, .y = 0.43, .z = 0.35, .w = 1.00 };
-    cl[Col.PlotHistogram] = Vec4{ .x = 0.90, .y = 0.70, .z = 0.00, .w = 1.00 };
-    cl[Col.PlotHistogramHovered] = Vec4{ .x = 1.00, .y = 0.45, .z = 0.00, .w = 1.00 };
-    cl[Col.TableHeaderBg] = Vec4{ .x = 0.78, .y = 0.87, .z = 0.98, .w = 1.00 };
-    cl[Col.TableBorderStrong] = Vec4{ .x = 0.57, .y = 0.57, .z = 0.64, .w = 1.00 };
-    cl[Col.TableBorderLight] = Vec4{ .x = 0.68, .y = 0.68, .z = 0.74, .w = 1.00 };
-    cl[Col.TableRowBg] = Vec4{ .x = 0.00, .y = 0.00, .z = 0.00, .w = 0.00 };
-    cl[Col.TableRowBgAlt] = Vec4{ .x = 0.30, .y = 0.30, .z = 0.30, .w = 0.09 };
-    cl[Col.TextSelectedBg] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.35 };
-    cl[Col.DragDropTarget] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.95 };
-    cl[Col.NavHighlight] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.80 };
-    cl[Col.NavWindowingHighlight] = Vec4{ .x = 0.70, .y = 0.70, .z = 0.70, .w = 0.70 };
-    cl[Col.NavWindowingDimBg] = Vec4{ .x = 0.20, .y = 0.20, .z = 0.20, .w = 0.20 };
-    cl[Col.ModalWindowDimBg] = Vec4{ .x = 0.20, .y = 0.20, .z = 0.20, .w = 0.35 };
+    cl[@enumToInt(Col.Text)] = base00;
+    cl[@enumToInt(Col.TextDisabled)] = base1;
+    cl[@enumToInt(Col.WindowBg)] = base3;
+    cl[@enumToInt(Col.ChildBg)] = base3;
+    cl[@enumToInt(Col.PopupBg)] = base3;
+    cl[@enumToInt(Col.Border)] = base2;
+    cl[@enumToInt(Col.BorderShadow)] = Vec4{ .x = 0.00, .y = 0.00, .z = 0.00, .w = 0.00 };
+    cl[@enumToInt(Col.FrameBg)] = base3;
+    cl[@enumToInt(Col.FrameBgHovered)] = base3;
+    cl[@enumToInt(Col.FrameBgActive)] = base3;
+    cl[@enumToInt(Col.TitleBg)] = base2;
+    cl[@enumToInt(Col.TitleBgActive)] = base2;
+    cl[@enumToInt(Col.TitleBgCollapsed)] = base3;
+    cl[@enumToInt(Col.MenuBarBg)] = base2;
+    cl[@enumToInt(Col.ScrollbarBg)] = Vec4{ .x = 0.98, .y = 0.98, .z = 0.98, .w = 0.53 };
+    cl[@enumToInt(Col.ScrollbarGrab)] = Vec4{ .x = 0.69, .y = 0.69, .z = 0.69, .w = 0.80 };
+    cl[@enumToInt(Col.ScrollbarGrabHovered)] = Vec4{ .x = 0.49, .y = 0.49, .z = 0.49, .w = 0.80 };
+    cl[@enumToInt(Col.ScrollbarGrabActive)] = Vec4{ .x = 0.49, .y = 0.49, .z = 0.49, .w = 1.00 };
+    cl[@enumToInt(Col.CheckMark)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 1.00 };
+    cl[@enumToInt(Col.SliderGrab)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.78 };
+    cl[@enumToInt(Col.SliderGrabActive)] = Vec4{ .x = 0.46, .y = 0.54, .z = 0.80, .w = 0.60 };
+    cl[@enumToInt(Col.Button)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.40 };
+    cl[@enumToInt(Col.ButtonHovered)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 1.00 };
+    cl[@enumToInt(Col.ButtonActive)] = Vec4{ .x = 0.06, .y = 0.53, .z = 0.98, .w = 1.00 };
+    cl[@enumToInt(Col.Header)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.31 };
+    cl[@enumToInt(Col.HeaderHovered)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.80 };
+    cl[@enumToInt(Col.HeaderActive)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 1.00 };
+    cl[@enumToInt(Col.Separator)] = Vec4{ .x = 0.39, .y = 0.39, .z = 0.39, .w = 0.62 };
+    cl[@enumToInt(Col.SeparatorHovered)] = Vec4{ .x = 0.14, .y = 0.44, .z = 0.80, .w = 0.78 };
+    cl[@enumToInt(Col.SeparatorActive)] = Vec4{ .x = 0.14, .y = 0.44, .z = 0.80, .w = 1.00 };
+    cl[@enumToInt(Col.ResizeGrip)] = Vec4{ .x = 0.35, .y = 0.35, .z = 0.35, .w = 0.17 };
+    cl[@enumToInt(Col.ResizeGripHovered)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.67 };
+    cl[@enumToInt(Col.ResizeGripActive)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.95 };
+    cl[@enumToInt(Col.Tab)] = Vec4{ .x = 0.76, .y = 0.80, .z = 0.84, .w = 0.93 };
+    cl[@enumToInt(Col.TabHovered)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.80 };
+    cl[@enumToInt(Col.TabActive)] = Vec4{ .x = 0.60, .y = 0.73, .z = 0.88, .w = 1.00 };
+    cl[@enumToInt(Col.TabUnfocused)] = Vec4{ .x = 0.92, .y = 0.93, .z = 0.94, .w = 0.99 };
+    cl[@enumToInt(Col.TabUnfocusedActive)] = Vec4{ .x = 0.74, .y = 0.82, .z = 0.91, .w = 1.00 };
+    cl[@enumToInt(Col.PlotLines)] = Vec4{ .x = 0.39, .y = 0.39, .z = 0.39, .w = 1.00 };
+    cl[@enumToInt(Col.PlotLinesHovered)] = Vec4{ .x = 1.00, .y = 0.43, .z = 0.35, .w = 1.00 };
+    cl[@enumToInt(Col.PlotHistogram)] = Vec4{ .x = 0.90, .y = 0.70, .z = 0.00, .w = 1.00 };
+    cl[@enumToInt(Col.PlotHistogramHovered)] = Vec4{ .x = 1.00, .y = 0.45, .z = 0.00, .w = 1.00 };
+    cl[@enumToInt(Col.TableHeaderBg)] = Vec4{ .x = 0.78, .y = 0.87, .z = 0.98, .w = 1.00 };
+    cl[@enumToInt(Col.TableBorderStrong)] = Vec4{ .x = 0.57, .y = 0.57, .z = 0.64, .w = 1.00 };
+    cl[@enumToInt(Col.TableBorderLight)] = Vec4{ .x = 0.68, .y = 0.68, .z = 0.74, .w = 1.00 };
+    cl[@enumToInt(Col.TableRowBg)] = Vec4{ .x = 0.00, .y = 0.00, .z = 0.00, .w = 0.00 };
+    cl[@enumToInt(Col.TableRowBgAlt)] = Vec4{ .x = 0.30, .y = 0.30, .z = 0.30, .w = 0.09 };
+    cl[@enumToInt(Col.TextSelectedBg)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.35 };
+    cl[@enumToInt(Col.DragDropTarget)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.95 };
+    cl[@enumToInt(Col.NavHighlight)] = Vec4{ .x = 0.26, .y = 0.59, .z = 0.98, .w = 0.80 };
+    cl[@enumToInt(Col.NavWindowingHighlight)] = Vec4{ .x = 0.70, .y = 0.70, .z = 0.70, .w = 0.70 };
+    cl[@enumToInt(Col.NavWindowingDimBg)] = Vec4{ .x = 0.20, .y = 0.20, .z = 0.20, .w = 0.20 };
+    cl[@enumToInt(Col.ModalWindowDimBg)] = Vec4{ .x = 0.20, .y = 0.20, .z = 0.20, .w = 0.35 };
 }
