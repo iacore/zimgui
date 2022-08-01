@@ -30,9 +30,14 @@ extern "C" void ImGui_End()
 	ImGui::End();
 }
 
-extern "C" void ImGui_Text(const char* fmt)
+extern "C" void ImGui_Text(const char* text, size_t len)
 {
-	ImGui::TextUnformatted(fmt);
+	ImGui::TextUnformatted(text, text + len);
+}
+
+extern "C" void ImGui_TextColored(const ImVec4* color, const char* text)
+{
+	ImGui::TextColoredV(*color, text, {});
 }
 
 extern "C" ImVec2 ImGui_CalcTextSize(const char* text, size_t text_len, float wrap_width)
@@ -43,6 +48,26 @@ extern "C" ImVec2 ImGui_CalcTextSize(const char* text, size_t text_len, float wr
 extern "C" bool ImGui_Button(const char* text, const ImVec2 size)
 {
 	return ImGui::Button(text, size);
+}
+
+extern "C" bool ImGui_SliderInt(const char* label, int* v, int v_min, int v_max, const char* fmt, ImGuiSliderFlags flags)
+{
+	return ImGui::SliderInt(label, v, v_min, v_max, fmt, flags);
+}
+
+extern "C" bool ImGui_InputText(const char* label, char* buf, size_t buflen, ImGuiInputTextFlags flags)
+{
+	return ImGui::InputText(label, buf, buflen, flags);
+}
+
+extern "C" void ImGui_Seprator()
+{
+	ImGui::Separator();
+}
+
+extern "C" void ImGui_SameLine(float offset_from_start, float spacing)
+{
+	ImGui::SameLine(offset_from_start, spacing);
 }
 
 extern "C" void ImGui_NewFrame()
@@ -124,6 +149,16 @@ extern "C" void ImGui_PushFont(void* font) {
 
 extern "C" void ImGui_PopFont() {
 	ImGui::PopFont();
+}
+
+extern "C" void ImGui_PushStyleColor(ImGuiCol slot, ImVec4 color)
+{
+	ImGui::PushStyleColor(slot, color);
+}
+
+extern "C" void ImGui_PopStyleColor(int count)
+{
+	ImGui::PopStyleColor(count);
 }
 
 extern "C" ImFontConfig ImGui_FontConfig_FontConfig()

@@ -2,6 +2,8 @@ const std = @import("std");
 
 ///////////////////////////////////////////////////////////////////////////////
 
+pub const ID = u32; // A unique ID used by widgets (typically the result of hashing a stack of string)
+
 // Context creation and access
 // - Each context create its own ImFontAtlas by default. You may instance one yourself and pass it to CreateContext() to share a font atlas between contexts.
 // - DLL users: heaps and globals are not shared across DLL boundaries! You will need to call SetCurrentContext() + SetAllocatorFunctions()
@@ -39,6 +41,998 @@ pub const Context = struct {
     extern fn ImGui_SetCurrentContext(context: *anyopaque) void;
 };
 
+// Flags for ImDrawList instance. Those are set automatically by ImGui:: functions from ImGuiIO settings, and generally not manipulated directly.
+// It is however possible to temporarily alter flags between calls to ImDrawList:: functions.
+pub const DrawListFlags = enum(c_int) {
+    None                    = 0,
+    AntiAliasedLines        = 1 << 0,  // Enable anti-aliased lines/borders (*2 the number of triangles for 1.0f wide line or lines thin enough to be drawn using textures, otherwise *3 the number of triangles)
+    AntiAliasedLinesUseTex  = 1 << 1,  // Enable anti-aliased lines/borders using textures when possible. Require backend to render with bilinear filtering (NOT point/nearest filtering).
+    AntiAliasedFill         = 1 << 2,  // Enable anti-aliased edge around filled shapes (rounded rectangles, circles).
+    AllowVtxOffset          = 1 << 3,  // Can emit 'VtxOffset > 0' to allow large meshes. Set when 'ImGuiBackendFlags_RendererHasVtxOffset' is enabled.
+};
+
+// ImDrawList: Lookup table size for adaptive arc drawing, cover full circle.
+pub const IM_DRAWLIST_ARCFAST_TABLE_SIZE = 48; // Number of samples in lookup table.
+
+pub const NavLayer = enum(c_int) {
+        Main  = 0,    // Main scrolling layer
+        Menu  = 1,    // Menu layer (access with Alt)
+        COUNT
+};
+
+// A cardinal direction
+pub const Dir = enum(c_int) {
+    None    = -1,
+    Left    = 0,
+    Right   = 1,
+    Up      = 2,
+    Down    = 3,
+    COUNT
+};
+
+pub const InputSource = enum(c_int) {
+    None = 0,
+    Mouse,
+    Keyboard,
+    Gamepad,
+    Clipboard,     // Currently only used by InputText()
+    Nav,           // Stored in g.ActiveIdSource only
+    COUNT
+};
+
+pub const ActivateFlags = enum(c_int) {
+    None                 = 0,
+    PreferInput          = 1 << 0,       // Favor activation that requires keyboard text input (e.g. for Slider/Drag). Default if keyboard is available.
+    PreferTweak          = 1 << 1,       // Favor activation for tweaking with arrows or gamepad (e.g. for Slider/Drag). Default if keyboard is not available.
+    TryToPreserveState   = 1 << 2,       // Request widget to preserve state if it can (e.g. InputText will try to preserve cursor/selection)
+};
+
+pub const ScrollFlags = enum(c_int) {
+    None                   = 0,
+    KeepVisibleEdgeX       = 1 << 0,       // If item is not visible: scroll as little as possible on X axis to bring item back into view [default for X axis]
+    KeepVisibleEdgeY       = 1 << 1,       // If item is not visible: scroll as little as possible on Y axis to bring item back into view [default for Y axis for windows that are already visible]
+    KeepVisibleCenterX     = 1 << 2,       // If item is not visible: scroll to make the item centered on X axis [rarely used]
+    KeepVisibleCenterY     = 1 << 3,       // If item is not visible: scroll to make the item centered on Y axis
+    AlwaysCenterX          = 1 << 4,       // Always center the result item on X axis [rarely used]
+    AlwaysCenterY          = 1 << 5,       // Always center the result item on Y axis [default for Y axis for appearing window)
+    NoScrollParent         = 1 << 6,       // Disable forwarding scrolling to parent window if required to keep item/rect visible (only scroll window the function was applied to).
+    //MaskX_                 = KeepVisibleEdgeX | KeepVisibleCenterX | AlwaysCenterX,
+    MaskX_ = 1 << 0 | 1 << 2 | 1 << 4,
+    //MaskY_                 = KeepVisibleEdgeY | KeepVisibleCenterY | AlwaysCenterY,
+    MaskY_ = 1 << 1 | 1 << 3 | 1 << 5,
+};
+
+pub const NavHighlightFlags = enum(c_int) {
+    None             = 0,
+    TypeDefault      = 1 << 0,
+    TypeThin         = 1 << 1,
+    AlwaysDraw       = 1 << 2,       // Draw rectangular highlight if (g.NavId == id) _even_ when using the mouse.
+    NoRounding       = 1 << 3,
+};
+
+pub const NavMoveFlags = enum(c_int) {
+    None                  = 0,
+    LoopX                 = 1 << 0,   // On failed request, restart from opposite side
+    LoopY                 = 1 << 1,
+    WrapX                 = 1 << 2,   // On failed request, request from opposite side one line down (when NavDir==right) or one line up (when NavDir==left)
+    WrapY                 = 1 << 3,   // This is not super useful but provided for completeness
+    AllowCurrentNavId     = 1 << 4,   // Allow scoring and considering the current NavId as a move target candidate. This is used when the move source is offset (e.g. pressing PageDown actually needs to send a Up move request, if we are pressing PageDown from the bottom-most item we need to stay in place)
+    AlsoScoreVisibleSet   = 1 << 5,   // Store alternate result in NavMoveResultLocalVisible that only comprise elements that are already fully visible (used by PageUp/PageDown)
+    ScrollToEdgeY         = 1 << 6,   // Force scrolling to min/max (used by Home/End) // FIXME-NAV: Aim to remove or reword, probably unnecessary
+    Forwarded             = 1 << 7,
+    DebugNoResult         = 1 << 8,   // Dummy scoring for debug purpose, don't apply result
+    FocusApi              = 1 << 9,
+    Tabbing               = 1 << 10,  // == Focus + Activate if item is Inputable + DontChangeNavHighlight
+    Activate              = 1 << 11,
+    DontSetNavHighlight   = 1 << 12,  // Do not alter the visible state of keyboard vs mouse nav highlight
+};
+
+// Data shared between all ImDrawList instances
+// You may want to create your own instance of this if you want to use ImDrawList completely without ImGui. In that case, watch out for future changes to this structure.
+pub const DrawListSharedData = extern struct {
+    TexUvWhitePixel: Vec2,            // UV of white pixel in the atlas
+    font: *Font,                       // Current/default font (optional, for simplified AddText overload)
+    FontSize: f32,                   // Current/default font size (optional, for simplified AddText overload)
+    CurveTessellationTol: f32,       // Tessellation tolerance when using PathBezierCurveTo()
+    CircleSegmentMaxError: f32,      // Number of circle segments to use per pixel of radius for AddCircle() etc
+    ClipRectFullscreen: Vec4,         // Value for PushClipRectFullscreen()
+    InitialFlags: DrawListFlags,               // Initial flags at the beginning of the frame (it is possible to alter flags on a per-drawlist basis afterwards)
+
+    // [Internal] Lookup tables
+    ArcFastVtx: [IM_DRAWLIST_ARCFAST_TABLE_SIZE]Vec2, // Sample points on the quarter of the circle.
+    ArcFastRadiusCutoff: f32,                        // Cutoff radius after which arc drawing will fallback to slower PathArcTo()
+    CircleSegmentCounts: [64]u8,    // Precomputed segment count for given radius before we calculate it dynamically (to avoid calculation overhead)
+    TexUvLines: *const Vec4;                 // UV of anti-aliased lines in the atlas
+
+    //ImDrawListSharedData();
+    //void SetCircleTessellationMaxError(float max_error);
+};
+
+pub const MouseCursor = enum(c_int) {
+    None = -1,
+    Arrow = 0,
+    TextInput,         // When hovering over InputText, etc.
+    ResizeAll,         // (Unused by Dear ImGui functions)
+    ResizeNS,          // When hovering over an horizontal border
+    ResizeEW,          // When hovering over a vertical border or a column
+    ResizeNESW,        // When hovering over the bottom-left corner of a window
+    ResizeNWSE,        // When hovering over the bottom-right corner of a window
+    Hand,              // (Unused by Dear ImGui functions. Use for e.g. hyperlinks)
+    NotAllowed,        // When hovering something with disallowed interaction. Usually a crossed circle.
+    COUNT
+};
+
+// Flags for ImGui::BeginDragDropSource(), ImGui::AcceptDragDropPayload()
+pub const DragDropFlags = enum(c_int) {
+    None                         = 0,
+    // BeginDragDropSource() flags
+    SourceNoPreviewTooltip       = 1 << 0,   // By default, a successful call to BeginDragDropSource opens a tooltip so you can display a preview or description of the source contents. This flag disable this behavior.
+    SourceNoDisableHover         = 1 << 1,   // By default, when dragging we clear data so that IsItemHovered() will return false, to avoid subsequent user code submitting tooltips. This flag disable this behavior so you can still call IsItemHovered() on the source item.
+    SourceNoHoldToOpenOthers     = 1 << 2,   // Disable the behavior that allows to open tree nodes and collapsing header by holding over them while dragging a source item.
+    SourceAllowNullID            = 1 << 3,   // Allow items such as Text(), Image() that have no unique identifier to be used as drag source, by manufacturing a temporary identifier based on their window-relative position. This is extremely unusual within the dear imgui ecosystem and so we made it explicit.
+    SourceExtern                 = 1 << 4,   // External source (from outside of dear imgui), won't attempt to read current item/window info. Will always return true. Only one Extern source can be active simultaneously.
+    SourceAutoExpirePayload      = 1 << 5,   // Automatically expire the payload if the source cease to be submitted (otherwise payloads are persisting while being dragged)
+    // AcceptDragDropPayload() flags
+    AcceptBeforeDelivery         = 1 << 10,  // AcceptDragDropPayload() will returns true even before the mouse button is released. You can then call IsDelivery() to test if the payload needs to be delivered.
+    AcceptNoDrawDefaultRect      = 1 << 11,  // Do not draw the default highlight rectangle when hovering over target.
+    AcceptNoPreviewTooltip       = 1 << 12,  // Request hiding the BeginDragDropSource tooltip from the BeginDragDropTarget site.
+    //AcceptPeekOnly               = AcceptBeforeDelivery | AcceptNoDrawDefaultRect, // For peeking ahead and inspecting the payload before delivery.
+    AcceptPeekOnly = 1 << 10 | 1 << 11, // For peeking ahead and inspecting the payload before delivery.
+};
+
+// Data payload for Drag and Drop operations: AcceptDragDropPayload(), GetDragDropPayload()
+pub const Payload = extern struct {
+    // Members
+    Data: *anyopaque,               // Data (copied and owned by dear imgui)
+    DataSize: c_int,           // Data size
+
+    // [Internal]
+    SourceId: ID;           // Source item id
+    SourceParentId: ID,     // Source parent id (if available)
+    DataFrameCount: c_int,     // Data timestamp
+    DataType: [32 + 1]u8,   // Data type tag (short user-supplied string, 32 characters max)
+    Preview: bool,            // Set when AcceptDragDropPayload() was called and mouse has been hovering the target item (nb: handle overlapping drag targets)
+    Delivery: bool,           // Set when AcceptDragDropPayload() was called and mouse button is released over the target item.
+
+    //ImGuiPayload()  { Clear(); }
+    //void Clear()    { SourceId = SourceParentId = 0; Data = NULL; DataSize = 0; memset(DataType, 0, sizeof(DataType)); DataFrameCount = -1; Preview = Delivery = false; }
+    //bool IsDataType(const char* type) const { return DataFrameCount != -1 && strcmp(type, DataType) == 0; }
+    //bool IsPreview() const                  { return Preview; }
+    //bool IsDelivery() const                 { return Delivery; }
+};
+
+// Flags for ColorEdit3() / ColorEdit4() / ColorPicker3() / ColorPicker4() / ColorButton()
+pub const ColorEditFlags = enum(c_int)
+{
+    None            = 0,
+    NoAlpha         = 1 << 1,   //              // ColorEdit, ColorPicker, ColorButton: ignore Alpha component (will only read 3 components from the input pointer).
+    NoPicker        = 1 << 2,   //              // ColorEdit: disable picker when clicking on color square.
+    NoOptions       = 1 << 3,   //              // ColorEdit: disable toggling options menu when right-clicking on inputs/small preview.
+    NoSmallPreview  = 1 << 4,   //              // ColorEdit, ColorPicker: disable color square preview next to the inputs. (e.g. to show only the inputs)
+    NoInputs        = 1 << 5,   //              // ColorEdit, ColorPicker: disable inputs sliders/text widgets (e.g. to show only the small preview color square).
+    NoTooltip       = 1 << 6,   //              // ColorEdit, ColorPicker, ColorButton: disable tooltip when hovering the preview.
+    NoLabel         = 1 << 7,   //              // ColorEdit, ColorPicker: disable display of inline text label (the label is still forwarded to the tooltip and picker).
+    NoSidePreview   = 1 << 8,   //              // ColorPicker: disable bigger color preview on right side of the picker, use small color square preview instead.
+    NoDragDrop      = 1 << 9,   //              // ColorEdit: disable drag and drop target. ColorButton: disable drag and drop source.
+    NoBorder        = 1 << 10,  //              // ColorButton: disable border (which is enforced by default)
+
+    // User Options (right-click on widget to change some of them).
+    AlphaBar        = 1 << 16,  //              // ColorEdit, ColorPicker: show vertical alpha bar/gradient in picker.
+    AlphaPreview    = 1 << 17,  //              // ColorEdit, ColorPicker, ColorButton: display preview as a transparent color over a checkerboard, instead of opaque.
+    AlphaPreviewHalf= 1 << 18,  //              // ColorEdit, ColorPicker, ColorButton: display half opaque / half checkerboard, instead of opaque.
+    HDR             = 1 << 19,  //              // (WIP) ColorEdit: Currently only disable 0.0f..1.0f limits in RGBA edition (note: you probably want to use Float flag as well).
+    DisplayRGB      = 1 << 20,  // [Display]    // ColorEdit: override _display_ type among RGB/HSV/Hex. ColorPicker: select any combination using one or more of RGB/HSV/Hex.
+    DisplayHSV      = 1 << 21,  // [Display]    // "
+    DisplayHex      = 1 << 22,  // [Display]    // "
+    Uint8           = 1 << 23,  // [DataType]   // ColorEdit, ColorPicker, ColorButton: _display_ values formatted as 0..255.
+    Float           = 1 << 24,  // [DataType]   // ColorEdit, ColorPicker, ColorButton: _display_ values formatted as 0.0f..1.0f floats instead of 0..255 integers. No round-trip of value via integers.
+    PickerHueBar    = 1 << 25,  // [Picker]     // ColorPicker: bar for Hue, rectangle for Sat/Value.
+    PickerHueWheel  = 1 << 26,  // [Picker]     // ColorPicker: wheel for Hue, triangle for Sat/Value.
+    InputRGB        = 1 << 27,  // [Input]      // ColorEdit, ColorPicker: input and output data in RGB format.
+    InputHSV        = 1 << 28,  // [Input]      // ColorEdit, ColorPicker: input and output data in HSV format.
+
+    // Defaults Options. You can set application defaults using SetColorEditOptions(). The intent is that you probably don't want to
+    // override them in most of your calls. Let the user choose via the option menu and/or call SetColorEditOptions() once during startup.
+    //DefaultOptions_ = Uint8 | DisplayRGB | InputRGB | PickerHueBar,
+    DefaultOptions_ = 1 << 23 | 1 << 20 | 1 << 27 | 1 << 25,
+
+    // [Internal] Masks
+    //DisplayMask_    = DisplayRGB | DisplayHSV | DisplayHex,
+    DisplayMask_    = 1 << 20 | 1 << 21 | 1 << 22,
+    //DataTypeMask_   = Uint8 | Float,
+    DataTypeMask_   = 1 << 23 | 1 << 24,
+    //PickerMask_     = PickerHueWheel | PickerHueBar,
+    PickerMask_     = 1 << 26 | 1 << 25,
+    // InputMask_      = InputRGB | InputHSV,
+    InputMask_      = 1 << 27 | 1 << 28,
+};
+
+// Enumeration for ImGui::SetWindow***(), SetNextWindow***(), SetNextItem***() functions
+// Represent a condition.
+// Important: Treat as a regular enum! Do NOT combine multiple values using binary operators! All the functions above treat 0 as a shortcut to ImGuiCond_Always.
+pub const Cond = enum(c_int){
+    None          = 0,        // No condition (always set the variable), same as _Always
+    Always        = 1 << 0,   // No condition (always set the variable)
+    Once          = 1 << 1,   // Set the variable once per runtime session (only the first call will succeed)
+    FirstUseEver  = 1 << 2,   // Set the variable if the object/window has no persistently saved data (no entry in .ini file)
+    Appearing     = 1 << 3,   // Set the variable if the object/window is appearing after being hidden/inactive (or the first time)
+};
+
+pub const NextItemData = extern struct {
+    Flags: ItemDataFlags,
+    Width: f32,          // Set by SetNextItemWidth()
+    FocusScopeId: ID,   // Set by SetNextItemMultiSelectData() (!= 0 signify value has been set, so it's an alternate version of HasSelectionData, we don't use Flags for this because they are cleared too early. This is mostly used for debugging)
+    OpenCond: Cond,
+    OpenVal: bool,        // Set by SetNextItemOpen()
+
+    //ImGuiNextItemData()         { memset(this, 0, sizeof(*this)); }
+    //inline void ClearFlags()    { Flags = ImGuiNextItemDataFlags_None; } // Also cleared manually by ItemAdd()!
+};
+
+// Storage for LastItem data
+pub const ItemStatusFlags = enum(c_int) {
+    None               = 0,
+    HoveredRect        = 1 << 0,   // Mouse position is within item rectangle (does NOT mean that the window is in correct z-order and can be hovered!, this is only one part of the most-common IsItemHovered test)
+    HasDisplayRect     = 1 << 1,   // g.LastItemData.DisplayRect is valid
+    Edited             = 1 << 2,   // Value exposed by item was edited in the current frame (should match the bool return value of most widgets)
+    ToggledSelection   = 1 << 3,   // Set when Selectable(), TreeNode() reports toggling a selection. We can't report "Selected", only state changes, in order to easily handle clipping with less issues.
+    ToggledOpen        = 1 << 4,   // Set when TreeNode() reports toggling their open state.
+    HasDeactivated     = 1 << 5,   // Set if the widget/group is able to provide data for the Deactivated flag.
+    Deactivated        = 1 << 6,   // Only valid if HasDeactivated is set.
+    HoveredWindow      = 1 << 7,   // Override the HoveredWindow test to allow cross-window hover testing.
+    FocusedByTabbing   = 1 << 8,   // Set when the Focusable item just got focused by Tabbing (FIXME: to be removed soon)
+};
+
+// Status storage for the last submitted item
+pub const LastItemData = extern struct {
+    id: ID,
+    InFlags: ItemFlags;            // See ImGuiItemFlags_
+    StatusFlags: ItemStatusFlags,        // See ImGuiItemStatusFlags_
+    rect: Rect,               // Full rectangle
+    NavRect: Rect,            // Navigation scoring rectangle (not displayed)
+    DisplayRect: Rect,        // Display rectangle (only if ImGuiItemStatusFlags_HasDisplayRect is set)
+
+    //ImGuiLastItemData()     { memset(this, 0, sizeof(*this)); }
+};
+
+pub const NextWindowDataFlags = enum(c_int) {
+    None               = 0,
+    HasPos             = 1 << 0,
+    HasSize            = 1 << 1,
+    HasContentSize     = 1 << 2,
+    HasCollapsed       = 1 << 3,
+    HasSizeConstraint  = 1 << 4,
+    HasFocus           = 1 << 5,
+    HasBgAlpha         = 1 << 6,
+    HasScroll          = 1 << 7,
+};
+
+pub extern fn ImGuiSizeCallback(*anyopaque) callconv(.C) void;
+
+// Storage for SetNexWindow** functions
+pub const NextWindowData = extern struct {
+    Flags: NextWindowDataFlags,
+    PosCond: Cond,
+    SizeCond: Cond,
+    CollapsedCond: Cond,
+    PosVal: Vec2,
+    PosPivotVal: Vec2,
+    SizeVal: Vec2,
+    ContentSizeVal: Vec2,
+    ScrollVal: Vec2,
+    CollapsedVal: bool,
+    SizeConstraintRect: Rect,
+    SizeCallback: ImGuiSizeCallback,
+    SizeCallbackUserData: *anyopaque,
+    BgAlphaVal: f32,             // Override background alpha
+    MenuBarOffsetMinVal: Vec2,    // (Always on) This is not exposed publicly, so we don't clear it and it doesn't have a corresponding flag (could we? for consistency?)
+
+    //ImGuiNextWindowData()       { memset(this, 0, sizeof(*this)); }
+    //inline void ClearFlags()    { Flags = ImGuiNextWindowDataFlags_None; }
+};
+
+pub const NextItemDataFlags = enum(c_int) {
+    None     = 0,
+    HasWidth = 1 << 0,
+    HasOpen  = 1 << 1,
+};
+
+pub const STB_TexteditState = extern struct {
+   /////////////////////
+   //
+   // public data
+   //
+
+    cursor: c_int,
+   // position of the text cursor within the string
+
+    select_start: c_int,          // selection start point
+    select_end: c_int,
+   // selection start and end point in characters; if equal, no selection.
+   // note that start may be less than or greater than end (e.g. when
+   // dragging the mouse, start is where the initial click was, and you
+   // can drag in either direction)
+
+    insert_mode: u8,
+   // each textfield keeps its own insert mode state. to keep an app-wide
+   // insert mode, copy this value in/out of the app state
+
+    row_count_per_page: c_int,
+   // page size in number of row.
+   // this value MUST be set to >0 for pageup or pagedown in multilines documents.
+
+   /////////////////////
+   //
+   // private data
+   //
+    cursor_at_end_of_line: u8, // not implemented yet
+    initialized: u8,
+    has_preferred_x: u8,
+    single_line: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    preferred_x: f32, // this determines where the cursor up/down tries to seek to along x
+   StbUndoState undostate;
+};
+
+const STB_TEXTEDIT_POSITIONTYPE = c_int;
+
+pub const StbUndoRecord = extern struct {
+    // private data
+    where: STB_TEXTEDIT_POSITIONTYPE,
+    insert_length: STB_TEXTEDIT_POSITIONTYPE,
+    delete_length: STB_TEXTEDIT_POSITIONTYPE,
+    char_storage: c_int,
+};
+
+const STB_TEXTEDIT_UNDOSTATECOUNT = 99;
+const STB_TEXTEDIT_UNDOCHARCOUNT = 999;
+const STB_TEXTEDIT_CHARTYPE = c_int;
+
+pub const StbUndoState = extern struct {
+    // private data
+    undo_rec: [STB_TEXTEDIT_UNDOSTATECOUNT]StbUndoRecord,
+    undo_char: [STB_TEXTEDIT_UNDOCHARCOUNT]STB_TEXTEDIT_CHARTYPE;
+    undo_point: u16,
+    redo_point: u16,
+    undo_char_point: c_int,
+    redo_char_point: c_int,
+};
+
+// FIXME: this is in development, not exposed/functional as a generic feature yet.
+// Horizontal/Vertical enums are fixed to 0/1 so they may be used to index ImVec2
+pub const LayoutType = enum(c_int) {
+    Horizontal = 0,
+    Vertical = 1
+};
+
+// Storage data for BeginComboPreview()/EndComboPreview()
+pub const ComboPreviewData = extern struct {
+    PreviewRect: Rect,
+    BackupCursorPos: Vec2,
+    BackupCursorMaxPos: Vec2,
+    BackupCursorPosPrevLine: Vec2,
+    BackupPrevLineTextBaseOffset: f32,
+    BackupLayout: LayoutType,
+
+    //ImGuiComboPreviewData() { memset(this, 0, sizeof(*this)); }
+};
+
+// Internal state of the currently focused/edited text input box
+// For a given item ID, access with ImGui::GetInputTextState()
+pub const InputTextState = extern struct {
+    id: ID,                     // widget id owning the text state
+    CurLenW: c_int,
+    CurLenA: c_int,       // we need to maintain our buffer length in both UTF-8 and wchar format. UTF-8 length is valid even if TextA is not.
+    TextW: ImVector,                  // edit buffer, we need to persist but can't guarantee the persistence of the user-provided buffer. so we copy into own buffer.
+    TextA: ImVector,                  // temporary UTF8 buffer for callbacks and other operations. this is not updated in every code-path! size=capacity.
+    InitialTextA: ImVector,           // backup of end-user buffer at the time of focus (in UTF-8, unaltered)
+    TextAIsValid: bool,           // temporary UTF8 buffer is not initially valid before we make the widget active (until then we pull the data from user argument)
+    BufCapacityA: c_int,           // end-user buffer capacity
+    ScrollX: f32,                // horizontal scrolling/offset
+    Stb: STB_TexteditState,                   // state for stb_textedit.h
+    CursorAnim: f32,             // timer for cursor blink, reset on every user action so the cursor reappears immediately
+    CursorFollow: bool,           // set when we want scrolling to follow the current cursor position (not always!)
+    SelectedAllMouseLock: bool,   // after a double-click to select all, we ignore further mouse drags to update selection
+    Edited: bool,                 // edited this frame
+    Flags: InputTextFlags,                  // copy of InputText() flags
+
+    //ImGuiInputTextState()                   { memset(this, 0, sizeof(*this)); }
+    //void        ClearText()                 { CurLenW = CurLenA = 0; TextW[0] = 0; TextA[0] = 0; CursorClamp(); }
+    //void        ClearFreeMemory()           { TextW.clear(); TextA.clear(); InitialTextA.clear(); }
+    //int         GetUndoAvailCount() const   { return Stb.undostate.undo_point; }
+    //int         GetRedoAvailCount() const   { return STB_TEXTEDIT_UNDOSTATECOUNT - Stb.undostate.redo_point; }
+    //void        OnKeyPressed(int key);      // Cannot be inline because we call in code in stb_textedit.h implementation
+
+    // Cursor & Selection
+    //void        CursorAnimReset()           { CursorAnim = -0.30f; }                                   // After a user-input the cursor stays on for a while without blinking
+    //void        CursorClamp()               { Stb.cursor = ImMin(Stb.cursor, CurLenW); Stb.select_start = ImMin(Stb.select_start, CurLenW); Stb.select_end = ImMin(Stb.select_end, CurLenW); }
+    //bool        HasSelection() const        { return Stb.select_start != Stb.select_end; }
+    //void        ClearSelection()            { Stb.select_start = Stb.select_end = Stb.cursor; }
+    //int         GetCursorPos() const        { return Stb.cursor; }
+    //int         GetSelectionStart() const   { return Stb.select_start; }
+    //int         GetSelectionEnd() const     { return Stb.select_end; }
+    //void        SelectAll()                 { Stb.select_start = 0; Stb.cursor = Stb.select_end = CurLenW; Stb.has_preferred_x = 0; }
+};
+
+pub const Context = extern struct {
+    Initialized: bool,
+    FontAtlasOwnedByContext: bool,            // IO.Fonts-> is owned by the ImGuiContext and will be destructed along with it.
+    io: IO,
+    InputEventsQueue: ImVector,                 // Input events which will be tricked/written into IO structure.
+    InputEventsTrail: ImVector,                 // Past input events processed in NewFrame(). This is to allow domain-specific application to access e.g mouse/pen trail.
+    style: Style,
+    font: *Font,                               // (Shortcut) == FontStack.empty() ? IO.Font : FontStack.back()
+    FontSize: f32,                           // (Shortcut) == FontBaseSize * g.CurrentWindow->FontWindowScale == window->FontSize(). Text height for current window.
+    FontBaseSize: f32,                       // (Shortcut) == IO.FontGlobalScale * Font->Scale * Font->FontSize. Base text height.
+    DrawListSharedData: ListSharedData,
+    Time: f64,
+    FrameCount: c_int,
+    FrameCountEnded: c_int,
+    FrameCountRendered: c_int,
+    WithinFrameScope: bool,                   // Set by NewFrame(), cleared by EndFrame()
+    WithinFrameScopeWithImplicitWindow: bool, // Set by NewFrame(), cleared by EndFrame() when the implicit debug window has been pushed
+    WithinEndChild: bool,                     // Set within EndChild()
+    GcCompactAll: bool,                       // Request full GC
+    TestEngineHookItems: bool,                // Will call test engine hooks: ImGuiTestEngineHook_ItemAdd(), ImGuiTestEngineHook_ItemInfo(), ImGuiTestEngineHook_Log()
+    TestEngine: *anyopaque,                         // Test engine user data
+
+    // Windows state
+    Windows: ImVector,                            // Windows, sorted in display order, back to front
+    WindowsFocusOrder: ImVector,                  // Root windows, sorted in focus order, back to front.
+    WindowsTempSortBuffer: ImVector,              // Temporary buffer used in EndFrame() to reorder windows so parents are kept before their child
+    CurrentWindowStack: ImVector,
+    WindowsById: Storage,                        // Map window's ImGuiID to ImGuiWindow*
+    WindowsActiveCount: c_int,                 // Number of unique windows submitted by frame
+    WindowsHoverPadding: Vec2,                // Padding around resizable windows for which hovering on counts as hovering the window == ImMax(style.TouchExtraPadding, WINDOWS_HOVER_PADDING)
+    CurrentWindow: *Window,                      // Window being drawn into
+    HoveredWindow: *Window,                      // Window the mouse is hovering. Will typically catch mouse inputs.
+    HoveredWindowUnderMovingWindow: *Window,     // Hovered window ignoring MovingWindow. Only set if MovingWindow is set.
+    MovingWindow: *Window,                       // Track the window we clicked on (in order to preserve focus). The actual window that is moved is generally MovingWindow->RootWindow.
+    WheelingWindow: *Window,                     // Track the window we started mouse-wheeling on. Until a timer elapse or mouse has moved, generally keep scrolling the same window even if during the course of scrolling the mouse ends up hovering a child window.
+    WheelingWindowRefMousePos: Vec2,
+    WheelingWindowTimer: f32,
+
+    // Item/widgets state and tracking information
+    DebugHookIdInfo: ID,                    // Will call core hooks: DebugHookIdInfo() from GetID functions, used by Stack Tool [next HoveredId/ActiveId to not pull in an extra cache-line]
+    HoveredId: ID,                          // Hovered widget, filled during the frame
+    HoveredIdPreviousFrame: ID,
+    HoveredIdAllowOverlap: bool,
+    HoveredIdUsingMouseWheel: bool,           // Hovered widget will use mouse wheel. Blocks scrolling the underlying window.
+    HoveredIdPreviousFrameUsingMouseWheel: bool,
+    HoveredIdDisabled: bool,                  // At least one widget passed the rect test, but has been discarded by disabled flag or popup inhibit. May be true even if HoveredId == 0.
+    HoveredIdTimer: f32,                     // Measure contiguous hovering time
+    HoveredIdNotActiveTimer: f32,            // Measure contiguous hovering time where the item has not been active
+    ActiveId: ID,                           // Active widget
+    ActiveIdIsAlive: ID,                    // Active widget has been seen this frame (we can't use a as the ActiveId may change within the frame)
+    ActiveIdTimer: f32,
+    ActiveIdIsJustActivated: bool,            // Set at the time of activation for one frame
+    ActiveIdAllowOverlap: bool,               // Active widget allows another widget to steal active id (generally for overlapping widgets, but not always)
+    ActiveIdNoClearOnFocusLoss: bool,         // Disable losing active id if the active id window gets unfocused.
+    ActiveIdHasBeenPressedBefore: bool,       // Track whether the active id led to a press (this is to allow changing between PressOnClick and PressOnRelease without pressing twice). Used by range_select branch.
+    ActiveIdHasBeenEditedBefore: bool,        // Was the value associated to the widget Edited over the course of the Active state.
+    ActiveIdHasBeenEditedThisFrame: bool,
+    ActiveIdClickOffset: Vec2,                // Clicked offset from upper-left corner, if applicable (currently only set by ButtonBehavior)
+    ActiveIdWindow: *Window,
+    ActiveIdSource: InputSource,                     // Activating with mouse or nav (gamepad/keyboard)
+    ActiveIdMouseButton: c_int,
+    ActiveIdPreviousFrame: ID,
+    ActiveIdPreviousFrameIsAlive: bool,
+    ActiveIdPreviousFrameHasBeenEditedBefore: bool,
+    ActiveIdPreviousFrameWindow: *Window,
+    LastActiveId: ID,                       // Store the last non-zero ActiveId, useful for animation.
+    LastActiveIdTimer: f32,                  // Store the last non-zero ActiveId timer since the beginning of activation, useful for animation.
+
+    // Input Ownership
+    ActiveIdUsingNavDirMask: u32,            // Active widget will want to read those nav move requests (e.g. can activate a button and move away from it)
+    ImBitArrayForNamedKeys  ActiveIdUsingKeyInputMask;          // Active widget will want to read those key inputs. When we grow the ImGuiKey enum we'll need to either to order the enum to make useful keys come first, either redesign this into e.g. a small array.
+
+    // Next window/item data
+    CurrentItemFlags: ItemFlags,                   // == g.ItemFlagsStack.back()
+    NextItemData: NextItemData,                       // Storage for SetNextItem** functions
+    LastItemData: LastItemData,                       // Storage for last submitted item (setup by ItemAdd)
+    NextWindowData: NextWindowData,                     // Storage for SetNextWindow** functions
+
+    // Shared stacks
+    ColorStack: ImVector,                         // Stack for PushStyleColor()/PopStyleColor() - inherited by Begin()
+    StyleVarStack: ImVector,                      // Stack for PushStyleVar()/PopStyleVar() - inherited by Begin()
+    FontStack: ImVector,                          // Stack for PushFont()/PopFont() - inherited by Begin()
+    FocusScopeStack: ImVector,                    // Stack for PushFocusScope()/PopFocusScope() - not inherited by Begin(), unless child window
+    ItemFlagsStack: ImVector,                     // Stack for PushItemFlag()/PopItemFlag() - inherited by Begin()
+    GroupStack: ImVector,                         // Stack for BeginGroup()/EndGroup() - not inherited by Begin()
+    OpenPopupStack: ImVector,                     // Which popups are open (persistent)
+    BeginPopupStack: ImVector,                    // Which level of BeginPopup() we are in (reset every frame)
+    BeginMenuCount: c_int,
+
+    // Viewports
+    Viewports: ImVector,                        // Active viewports (Size==1 in 'master' branch). Each viewports hold their copy of ImDrawData.
+
+    // Gamepad/keyboard Navigation
+    NavWindow: *Window,                          // Focused window for navigation. Could be called 'FocusedWindow'
+    NavId: ID,                              // Focused item for navigation
+    NavFocusScopeId: ID,                    // Identify a selection scope (selection code often wants to "clear other items" when landing on an item of the selection set)
+    NavActivateId: ID,                      // ~~ (g.ActiveId == 0) && (IsKeyPressed(ImGuiKey_Space) || IsKeyPressed(ImGuiKey_NavGamepadActivate)) ? NavId : 0, also set when calling ActivateItem()
+    NavActivateDownId: ID,                  // ~~ IsKeyDown(ImGuiKey_Space) || IsKeyDown(ImGuiKey_NavGamepadActivate) ? NavId : 0
+    NavActivatePressedId: ID,               // ~~ IsKeyPressed(ImGuiKey_Space) || IsKeyPressed(ImGuiKey_NavGamepadActivate) ? NavId : 0 (no repeat)
+    NavActivateInputId: ID,                 // ~~ IsKeyPressed(ImGuiKey_Enter) || IsKeyPressed(ImGuiKey_NavGamepadInput) ? NavId : 0; ImGuiActivateFlags_PreferInput will be set and NavActivateId will be 0.
+    NavActivateFlags: ActivateFlags,
+    NavJustMovedToId: ID,                   // Just navigated to this id (result of a successfully MoveRequest).
+    NavJustMovedToFocusScopeId: ID,         // Just navigated to this focus scope id (result of a successfully MoveRequest).
+    NavJustMovedToKeyMods: ModFlags,
+    NavNextActivateId: ID,                  // Set by ActivateItem(), queued until next frame.
+    NavNextActivateFlags: ActivateFlags,
+    NavInputSource: InputSource,                     // Keyboard or Gamepad mode? THIS WILL ONLY BE None or NavGamepad or NavKeyboard.
+    NavLayer: NavLayer,                           // Layer we are navigating on. For now the system is hard-coded for 0=main contents and 1=menu/title bar, may expose layers later.
+    NavIdIsAlive: bool,                       // Nav widget has been seen this frame ~~ NavRectRel is valid
+    NavMousePosDirty: bool,                   // When set we will update mouse position if (io.ConfigFlags & ImGuiConfigFlags_NavEnableSetMousePos) if set (NB: this not enabled by default)
+    NavDisableHighlight: bool,                // When user starts using mouse, we hide gamepad/keyboard highlight (NB: but they are still available, which is why NavDisableHighlight isn't always != NavDisableMouseHover)
+    NavDisableMouseHover: bool,               // When user starts using gamepad/keyboard, we hide mouse hovering highlight until mouse is touched again.
+
+    // Navigation: Init & Move Requests
+    NavAnyRequest: bool,                      // ~~ NavMoveRequest || NavInitRequest this is to perform early out in ItemAdd()
+    NavInitRequest: bool,                     // Init request for appearing window to select first item
+    NavInitRequestFromMove: bool,
+    NavInitResultId: ID,                    // Init request result (first item of the window, or one for which SetItemDefaultFocus() was called)
+    NavInitResultRectRel: Rect,               // Init request result rectangle (relative to parent window)
+    NavMoveSubmitted: bool,                   // Move request submitted, will process result on next NewFrame()
+    NavMoveScoringItems: bool,                // Move request submitted, still scoring incoming items
+    NavMoveForwardToNextFrame: bool,
+    nav_move_flags: NavMoveFlags,
+    NavMoveScrollFlags: ScrollFlags,
+    NavMoveKeyMods: ModFlags,
+    NavMoveDir: Dir,                         // Direction of the move request (left/right/up/down)
+    NavMoveDirForDebug: Dir,
+    NavMoveClipDir: Dir,                     // FIXME-NAV: Describe the purpose of this better. Might want to rename?
+    NavScoringRect: Rect,                     // Rectangle used for scoring, in screen space. Based of window->NavRectRel[], modified for directional navigation scoring.
+    NavScoringNoClipRect: Rect,               // Some nav operations (such as PageUp/PageDown) enforce a region which clipper will attempt to always keep submitted
+    NavScoringDebugCount: c_int,               // Metrics for debugging
+    NavTabbingDir: c_int,                      // Generally -1 or +1, 0 when tabbing without a nav id
+    NavTabbingCounter: c_int,                  // >0 when counting items for tabbing
+    NavMoveResultLocal: NavItemData,                 // Best move request candidate within NavWindow
+    NavMoveResultLocalVisible: NavItemData,          // Best move request candidate within NavWindow that are mostly visible (when using ImGuiNavMoveFlags_AlsoScoreVisibleSet flag)
+    NavMoveResultOther: NavItemData,                 // Best move request candidate within NavWindow's flattened hierarchy (when using ImGuiWindowFlags_NavFlattened flag)
+    NavTabbingResultFirst: NavItemData,              // First tabbing request candidate within NavWindow and flattened hierarchy
+
+    // Navigation: Windowing (CTRL+TAB for list, or Menu button + keys or directional pads to move/resize)
+    NavWindowingTarget: *Window,                 // Target window when doing CTRL+Tab (or Pad Menu + FocusPrev/Next), this window is temporarily displayed top-most!
+    NavWindowingTargetAnim: *Window,             // Record of last valid NavWindowingTarget until DimBgRatio and NavWindowingHighlightAlpha becomes 0.0f, so the fade-out can stay on it.
+    NavWindowingListWindow: *Window,             // Internal window actually listing the CTRL+Tab contents
+    NavWindowingTimer: f32,
+    NavWindowingHighlightAlpha: f32,
+    NavWindowingToggleLayer: bool,
+    NavWindowingAccumDeltaPos: Vec2,
+    NavWindowingAccumDeltaSize: Vec2,
+
+    // Render
+    DimBgRatio: f32,                         // 0.0..1.0 animation when fading in a dimming background (for modal window and CTRL+TAB list)
+    MouseCursor: MouseCursor,
+
+    // Drag and Drop
+    DragDropActive: bool,
+    DragDropWithinSource: bool,               // Set when within a BeginDragDropXXX/EndDragDropXXX block for a drag source.
+    DragDropWithinTarget: bool,               // Set when within a BeginDragDropXXX/EndDragDropXXX block for a drag target.
+    DragDropSourceFlags: DragDropFlags,
+    DragDropSourceFrameCount: c_int,
+    DragDropMouseButton: c_int,
+    DragDropPayload: Payload,
+    DragDropTargetRect: Rect,                 // Store rectangle of current target candidate (we favor small targets when overlapping)
+    DragDropTargetId: ID,
+    DragDropAcceptFlags: DragDropFlags,
+    DragDropAcceptIdCurrRectSurface: f32,    // Target item surface (we resolve overlapping targets by prioritizing the smaller surface)
+    DragDropAcceptIdCurr: ID,               // Target item id (set at the time of accepting the payload)
+    DragDropAcceptIdPrev: ID,               // Target item id from previous frame (we need to store this to allow for overlapping drag and drop targets)
+    DragDropAcceptFrameCount: c_int,           // Last time a target expressed a desire to accept the source
+    DragDropHoldJustPressedId: ID,          // Set when holding a payload just made ButtonBehavior() return a press.
+    DragDropPayloadBufHeap: ImVector,             // We don't expose the ImGuiPayload only holds pointer+size
+    DragDropPayloadBufLocal: [16]u8,        // Local buffer for small payloads
+
+    // Clipper
+    ClipperTempDataStacked: c_int,
+    ClipperTempData: ImVector,
+
+    // Tables
+    //ImGuiTable*                     CurrentTable;
+    CurrentTable: *anyopaque,
+    TablesTempDataStacked: c_int,      // Temporary table data size (because we leave previous instances undestructed, we generally don't use TablesTempData.Size)
+    TablesTempData: ImVector,             // Temporary table data (buffers reused/shared across instances, support nesting)
+    Tables: ImPool,                     // Persistent table data
+    TablesLastTimeActive: ImVector,       // Last used timestamp of each tables (SOA, for efficient GC)
+    DrawChannelsTempMergeBuffer: ImVector,
+
+    // Tab bars
+    //ImGuiTabBar*                    CurrentTabBar;
+    CurrentTabBar: *anyopaque,
+    TabBars: ImPool,
+    CurrentTabBarStack: ImVector,
+    ShrinkWidthBuffer: ImVector,
+
+    // Widget state
+    MouseLastValidPos: Vec2,
+    InputTextState: InputTextState,
+    InputTextPasswordFont: Font,
+    TempInputId: ID,                        // Temporary text input when CTRL+clicking on a slider, etc.
+    ColorEditOptions: ColorEditFlags,                   // Store user options for color edit widgets
+    ColorEditLastHue: f32,                   // Backup of last Hue associated to LastColor, so we can restore Hue in lossy RGB<>HSV round trips
+    ColorEditLastSat: f32,                   // Backup of last Saturation associated to LastColor, so we can restore Saturation in lossy RGB<>HSV round trips
+    ColorEditLastColor: u32,                 // RGB value with alpha set to 0.
+    ColorPickerRef: Vec4,                     // Initial/reference color at the time of opening the color picker.
+    combo_preview_data: ComboPreviewData,
+    SliderGrabClickOffset: f32,
+    SliderCurrentAccum: f32,                 // Accumulated slider delta when using navigation controls.
+    SliderCurrentAccumDirty: bool,            // Has the accumulated slider delta changed since last time we tried to apply it?
+    DragCurrentAccumDirty: bool,
+    DragCurrentAccum: f32,                   // Accumulator for dragging modification. Always high-precision, not rounded by end-user precision settings
+    DragSpeedDefaultRatio: f32,              // If speed == 0.0f, uses (max-min) * DragSpeedDefaultRatio
+    ScrollbarClickDeltaToGrabCenter: f32,    // Distance between mouse and center of grab box, normalized in parent space. Use storage?
+    DisabledAlphaBackup: f32,                // Backup for style.Alpha for BeginDisabled()
+    DisabledStackSize: u16,
+    TooltipOverrideCount: u16,
+    TooltipSlowDelay: f32,                   // Time before slow tooltips appears (FIXME: This is temporary until we merge in tooltip timer+priority work)
+    ClipboardHandlerData: ImVector,               // If no custom clipboard handler is defined
+    MenusIdSubmittedThisFrame: ImVector,          // A list of menu IDs that were rendered at least once
+
+    // Platform support
+    ImGuiPlatformImeData    PlatformImeData;                    // Data updated by current frame
+    ImGuiPlatformImeData    PlatformImeDataPrev;                // Previous frame data (when changing we will call io.SetPlatformImeDataFn
+    char                    PlatformLocaleDecimalPoint;         // '.' or *localeconv()->decimal_point
+
+    // Settings
+    SettingsLoaded: bool,
+    SettingsDirtyTimer: f32,                 // Save .ini Settings to memory when time reaches zero
+    ImGuiTextBuffer         SettingsIniData;                    // In memory .ini settings
+    SettingsHandlers: ImVector,       // List of .ini settings handlers
+    ImChunkStream<ImGuiWindowSettings>  SettingsWindows;        // ImGuiWindow .ini settings entries
+    ImChunkStream<ImGuiTableSettings>   SettingsTables;         // ImGuiTable .ini settings entries
+    Hooks: ImVector,                  // Hooks for extensions (e.g. test engine)
+    HookIdNext: ID,             // Next available HookId
+
+    // Capture/Logging
+    LogEnabled: bool,                         // Currently capturing
+    ImGuiLogType            LogType;                            // Capture target
+    ImFileHandle            LogFile;                            // If != NULL log to stdout/ file
+    ImGuiTextBuffer         LogBuffer;                          // Accumulation buffer when log to clipboard. This is pointer so our GImGui static constructor doesn't call heap allocators.
+    const char*             LogNextPrefix;
+    const char*             LogNextSuffix;
+    LogLinePosY: f32,
+    LogLineFirstItem: bool,
+    LogDepthRef: c_int,
+    LogDepthToExpand: c_int,
+    LogDepthToExpandDefault: c_int,            // Default/stored value for LogDepthMaxExpand if not specified in the LogXXX function call.
+
+    // Debug Tools
+    ImGuiDebugLogFlags      DebugLogFlags;
+    ImGuiTextBuffer         DebugLogBuf;
+    DebugItemPickerActive: bool,              // Item picker is active (started with DebugStartItemPicker())
+    ImU8                    DebugItemPickerMouseButton;
+    DebugItemPickerBreakId: ID,             // Will call IM_DEBUG_BREAK() when encountering this ID
+    ImGuiMetricsConfig      DebugMetricsConfig;
+    ImGuiStackTool          DebugStackTool;
+
+    // Misc
+    FramerateSecPerFrame: [60]f32,           // Calculate estimate of framerate for user over the last 60 frames..
+    FramerateSecPerFrameIdx: c_int,
+    FramerateSecPerFrameCount: c_int,
+    FramerateSecPerFrameAccum: f32,
+    WantCaptureMouseNextFrame: c_int,          // Explicit capture override via SetNextFrameWantCaptureMouse()/SetNextFrameWantCaptureKeyboard(). Default to -1.
+    WantCaptureKeyboardNextFrame: c_int,       // "
+    WantTextInputNextFrame: c_int,
+    TempBuffer: ImVector,                         // Temporary text buffer
+};
+
+pub const Storage = extern struct {
+    data: ImVector,
+};
+
+pub const NavItemData = extern struct {
+    window: *Window,         // Init,Move    // Best candidate window (result->ItemWindow->RootWindowForNav == request->Window)
+    id: ID,             // Init,Move    // Best candidate item ID
+    FocusScopeId: ID,   // Init,Move    // Best candidate focus scope ID
+    RectRel: Rect,        // Init,Move    // Best candidate bounding box in window relative space
+    InFlags: ItemFlags,        // ????,Move    // Best candidate item flags
+    DistBox: f32,        //      Move    // Best candidate box distance to current NavId
+    DistCenter: f32,     //      Move    // Best candidate center distance to current NavId
+    DistAxial: f32,      //      Move    // Best candidate axial distance to current NavId
+
+    //ImGuiNavItemData()  { Clear(); }
+    //void Clear()        { Window = NULL; ID = FocusScopeId = 0; InFlags = 0; DistBox = DistCenter = DistAxial = FLT_MAX; }
+};
+
+// Storage for one window
+pub const Window = extern struct {
+    char*                   Name;                               // Window name, owned by the window.
+    ID: ID,                                 // == ImHashStr(Name)
+    ImGuiWindowFlags        Flags;                              // See enum ImGuiWindowFlags_
+    ImGuiViewportP*         Viewport;                           // Always set in Begin(). Inactive windows may have a NULL value here if their viewport was discarded.
+    Pos: Vec2,                                // Position (always rounded-up to nearest pixel)
+    Size: Vec2,                               // Current size (==SizeFull or collapsed title bar size)
+    SizeFull: Vec2,                           // Size when non collapsed
+    ContentSize: Vec2,                        // Size of contents/scrollable client area (calculated from the extents reach of the cursor) from previous frame. Does not include window decoration or window padding.
+    ContentSizeIdeal: Vec2,
+    ContentSizeExplicit: Vec2,                // Size of contents/scrollable client area explicitly request by the user via SetNextWindowContentSize().
+    WindowPadding: Vec2,                      // Window padding at the time of Begin().
+    WindowRounding: f32,                     // Window rounding at the time of Begin(). May be clamped lower to avoid rendering artifacts with title bar, menu bar etc.
+    WindowBorderSize: f32,                   // Window border size at the time of Begin().
+    NameBufLen: c_int,                         // Size of buffer storing Name. May be larger than strlen(Name)!
+    MoveId: ID,                             // == window->GetID("#MOVE")
+    ChildId: ID,                            // ID of corresponding item in parent window (for navigation to return from child window to parent window)
+    Scroll: Vec2,
+    ScrollMax: Vec2,
+    ScrollTarget: Vec2,                       // target scroll position. stored as cursor position with scrolling canceled out, so the highest point is always 0.0f. (FLT_MAX for no change)
+    ScrollTargetCenterRatio: Vec2,            // 0.0f = scroll so that target position is at top, 0.5f = scroll so that target position is centered
+    ScrollTargetEdgeSnapDist: Vec2,           // 0.0f = no snapping, >0.0f snapping threshold
+    ScrollbarSizes: Vec2,                     // Size taken by each scrollbars on their smaller axis. Pay attention! ScrollbarSizes.x == width of the vertical scrollbar, ScrollbarSizes.y = height of the horizontal scrollbar.
+    ScrollbarX: bool, ScrollbarY;             // Are scrollbars visible?
+    Active: bool,                             // Set to true on Begin(), unless Collapsed
+    WasActive: bool,
+    WriteAccessed: bool,                      // Set to true when any widget access the current window
+    Collapsed: bool,                          // Set when collapsing window to become only title-bar
+    WantCollapseToggle: bool,
+    SkipItems: bool,                          // Set when items can safely be all clipped (e.g. window not visible or collapsed)
+    Appearing: bool,                          // Set during the frame where the window is appearing (or re-appearing)
+    Hidden: bool,                             // Do not display (== HiddenFrames*** > 0)
+    IsFallbackWindow: bool,                   // Set on the "Debug##Default" window.
+    IsExplicitChild: bool,                    // Set when passed _ChildWindow, left to false by BeginDocked()
+    HasCloseButton: bool,                     // Set when the window has a close button (p_open != NULL)
+    signed char             ResizeBorderHeld;                   // Current border being held for resize (-1: none, otherwise 0-3)
+    BeginCount: u16,                         // Number of Begin() during the current frame (generally 0 or 1, 1+ if appending via multiple Begin/End pairs)
+    BeginOrderWithinParent: u16,             // Begin() order within immediate parent window, if we are a child window. Otherwise 0.
+    BeginOrderWithinContext: u16,            // Begin() order within entire imgui context. This is mostly used for debugging submission order related issues.
+    FocusOrder: u16,                         // Order within WindowsFocusOrder[], altered when windows are focused.
+    PopupId: ID,                            // ID in the popup stack when this window is used as a popup/menu (because we use generic Name/ID for recycling)
+    AutoFitFramesX: s8,
+    AutoFitFramesY: s8,
+    AutoFitChildAxises: s8,
+    AutoFitOnlyGrows: bool,
+    AutoPosLastDirection: Dir,
+    HiddenFramesCanSkipItems: s8,           // Hide the window for N frames
+    HiddenFramesCannotSkipItems: s8,        // Hide the window for N frames while allowing items to be submitted so we can measure their size
+    HiddenFramesForRenderOnly: s8,          // Hide the window until frame N at Render() time only
+    DisableInputsFrames: s8,                // Disable window interactions for N frames
+    ImGuiCond               SetWindowPosAllowFlags : 8;         // store acceptable condition flags for SetNextWindowPos() use.
+    ImGuiCond               SetWindowSizeAllowFlags : 8;        // store acceptable condition flags for SetNextWindowSize() use.
+    ImGuiCond               SetWindowCollapsedAllowFlags : 8;   // store acceptable condition flags for SetNextWindowCollapsed() use.
+    SetWindowPosVal: Vec2,                    // store window position when using a non-zero Pivot (position set needs to be processed when we know the window size)
+    SetWindowPosPivot: Vec2,                  // store window pivot for positioning. ImVec2(0, 0) when positioning from top-left corner; ImVec2(0.5f, 0.5f) for centering; ImVec2(1, 1) for bottom right.
+
+    IDStack: ImVector,                            // ID stack. ID are hashes seeded with the value at the top of the stack. (In theory this should be in the TempData structure)
+    ImGuiWindowTempData     DC;                                 // Temporary per-window data, reset at the beginning of the frame. This used to be called ImGuiDrawContext, hence the "DC" variable name.
+
+    // The best way to understand what those rectangles are is to use the 'Metrics->Tools->Show Windows Rectangles' viewer.
+    // The main 'OuterRect', omitted as a field, is window->Rect().
+    OuterRectClipped: Rect,                   // == Window->Rect() just after setup in Begin(). == window->Rect() for root window.
+    InnerRect: Rect,                          // Inner rectangle (omit title bar, menu bar, scroll bar)
+    InnerClipRect: Rect,                      // == InnerRect shrunk by WindowPadding*0.5f on each side, clipped within viewport or parent clip rect.
+    WorkRect: Rect,                           // Initially covers the whole scrolling region. Reduced by containers e.g columns/tables when active. Shrunk by WindowPadding*1.0f on each side. This is meant to replace ContentRegionRect over time (from 1.71+ onward).
+    ParentWorkRect: Rect,                     // Backup of WorkRect before entering a container such as columns/tables. Used by e.g. SpanAllColumns functions to easily access. Stacked containers are responsible for maintaining this. // FIXME-WORKRECT: Could be a stack?
+    ClipRect: Rect,                           // Current clipping/scissoring rectangle, evolve as we are using PushClipRect(), etc. == DrawList->clip_rect_stack.back().
+    ContentRegionRect: Rect,                  // FIXME: This is currently confusing/misleading. It is essentially WorkRect but not handling of scrolling. We currently rely on it as right/bottom aligned sizing operation need some size to rely on.
+    HitTestHoleSize: Vec2ih,                    // Define an optional rectangular hole where mouse will pass-through the window.
+    HitTestHoleOffset: Vec2ih,
+
+    LastFrameActive: c_int,                    // Last frame number the window was Active.
+    LastTimeActive: f32,                     // Last timestamp the window was Active (using as: f32,we don't need high precision there)
+    ItemWidthDefault: f32,
+    StateStorage: Storage,
+    ColumnsStorage: ImVector,
+    FontWindowScale: f32,                    // User scale multiplier per-window, via SetWindowFontScale()
+    SettingsOffset: c_int,                     // into SettingsWindows[] (offsets are always valid as we only grow the array from the back)
+
+    DrawList: *DrawList,                           // == &DrawListInst (for backward compatibility reason with code using internal.h we keep this a pointer)
+    DrawListInst: DrawList,
+    ParentWindow: *Window,                       // If we are a child _or_ popup _or_ docked window, this is pointing to our parent. Otherwise NULL.
+    ParentWindowInBeginStack: *Window,
+    RootWindow: *Window,                         // Point to ourself or first ancestor that is not a child window. Doesn't cross through popups/dock nodes.
+    RootWindowPopupTree: *Window,                // Point to ourself or first ancestor that is not a child window. Cross through popups parent<>child.
+    RootWindowForTitleBarHighlight: *Window,     // Point to ourself or first ancestor which will display TitleBgActive color when this window is active.
+    RootWindowForNav: *Window,                   // Point to ourself or first ancestor which doesn't have the NavFlattened flag.
+
+    NavLastChildNavWindow: *Window,              // When going to the menu bar, we remember the child window we came from. (This could probably be made implicit if we kept g.Windows sorted by last focused including child window.)
+    NavLastIds: [NavLayer.COUNT]ID,    // Last known NavId for this window, per layer (0/1)
+    NavRectRel: [NavLayer.COUNT]Rect,    // Reference rectangle, in window relative space
+
+    MemoryDrawListIdxCapacity: c_int,          // Backup of last idx/vtx count, so when waking up the window we can preallocate and avoid iterative alloc/copy
+    MemoryDrawListVtxCapacity: c_int,
+    MemoryCompacted: bool,                    // Set when window extraneous data have been garbage collected
+
+    //ImGuiWindow(ImGuiContext* context, const char* name);
+    //~ImGuiWindow();
+
+    //ImGuiID     GetID(const char* str, const char* str_end = NULL);
+    //ImGuiID     GetID(const void* ptr);
+    //ImGuiID     GetID(int n);
+    //ImGuiID     GetIDFromRectangle(const ImRect& r_abs);
+
+    // We don't use g.FontSize because the window may be != g.CurrentWidow.
+    //ImRect      Rect() const            { return ImRect(Pos.x, Pos.y, Pos.x + Size.x, Pos.y + Size.y); }
+    //float       CalcFontSize() const    { ImGuiContext& g = *GImGui; float scale = g.FontBaseSize * FontWindowScale; if (ParentWindow) scale *= ParentWindow->FontWindowScale; return scale; }
+    //float       TitleBarHeight() const  { ImGuiContext& g = *GImGui; return (Flags & ImGuiWindowFlags_NoTitleBar) ? 0.0f : CalcFontSize() + g.Style.FramePadding.y * 2.0f; }
+    //ImRect      TitleBarRect() const    { return ImRect(Pos, ImVec2(Pos.x + SizeFull.x, Pos.y + TitleBarHeight())); }
+    //float       MenuBarHeight() const   { ImGuiContext& g = *GImGui; return (Flags & ImGuiWindowFlags_MenuBar) ? DC.MenuBarOffset.y + CalcFontSize() + g.Style.FramePadding.y * 2.0f : 0.0f; }
+    //ImRect      MenuBarRect() const     { float y1 = Pos.y + TitleBarHeight(); return ImRect(Pos.x, y1, Pos.x + SizeFull.x, y1 + MenuBarHeight()); }
+};
+
+// Flags for ImDrawList instance. Those are set automatically by ImGui:: functions from ImGuiIO settings, and generally not manipulated directly.
+// It is however possible to temporarily alter flags between calls to ImDrawList:: functions.
+pub const DrawListFlags = enum(c_int) {
+    None                    = 0,
+    AntiAliasedLines        = 1 << 0,  // Enable anti-aliased lines/borders (*2 the number of triangles for 1.0f wide line or lines thin enough to be drawn using textures, otherwise *3 the number of triangles)
+    AntiAliasedLinesUseTex  = 1 << 1,  // Enable anti-aliased lines/borders using textures when possible. Require backend to render with bilinear filtering (NOT point/nearest filtering).
+    AntiAliasedFill         = 1 << 2,  // Enable anti-aliased edge around filled shapes (rounded rectangles, circles).
+    AllowVtxOffset          = 1 << 3,  // Can emit 'VtxOffset > 0' to allow large meshes. Set when 'ImGuiBackendFlags_RendererHasVtxOffset' is enabled.
+};
+
+pub const TextureId = *anyopaque;
+
+// [Internal] For use by ImDrawList
+pub const DrawCmdHeader = extern struct {
+    ClipRect: Vec4,
+    TextureId: TextureId,
+    VtxOffset: u32,
+};
+
+// Split/Merge functions are used to split the draw list into different layers which can be drawn into out of order.
+// This is used by the Columns/Tables API, so items of each column can be batched together in a same draw call.
+pub const DrawListSplitter = extern struct {
+    _Current: c_int,    // Current channel number (0)
+    _Count: c_int,      // Number of active channels (1+)
+    _Channels: ImVector,   // Draw channels (not resized down so _Count might be < Channels.Size)
+
+    //inline ImDrawListSplitter()  { memset(this, 0, sizeof(*this)); }
+    //inline ~ImDrawListSplitter() { ClearFreeMemory(); }
+    //inline void                 Clear() { _Current = 0; _Count = 1; } // Do not clear Channels[] so our allocations are reused next frame
+    //IMGUI_API void              ClearFreeMemory();
+    //IMGUI_API void              Split(ImDrawList* draw_list, int count);
+    //IMGUI_API void              Merge(ImDrawList* draw_list);
+    //IMGUI_API void              SetCurrentChannel(ImDrawList* draw_list, int channel_idx);
+};
+
+// Draw command list
+// This is the low-level list of polygons that ImGui:: functions are filling. At the end of the frame,
+// all command lists are passed to your ImGuiIO::RenderDrawListFn function for rendering.
+// Each dear imgui window contains its own ImDrawList. You can use ImGui::GetWindowDrawList() to
+// access the current window draw list and draw custom primitives.
+// You can interleave normal ImGui:: calls and adding primitives to the current draw list.
+// In single viewport mode, top-left is == GetMainViewport()->Pos (generally 0,0), bottom-right is == GetMainViewport()->Pos+Size (generally io.DisplaySize).
+// You are totally free to apply whatever transformation matrix to want to the data (depending on the use of the transformation you may want to apply it to ClipRect as well!)
+// Important: Primitives are always added to the list and not culled (culling is done at higher-level by ImGui:: functions), if you use this API a lot consider coarse culling your drawn objects.
+pub const DrawList = extern struct {
+    // This is what you have to render
+    CmdBuffer: ImVector,          // Draw commands. Typically 1 command = 1 GPU draw call, unless the command is a callback.
+    IdxBuffer: ImVector,          // Index buffer. Each command consume ImDrawCmd::ElemCount of those
+    VtxBuffer: ImVector,          // Vertex buffer.
+    Flags: DrawListFlags;              // Flags, you may poke into these to adjust anti-aliasing settings per-primitive.
+
+    // [Internal, used while building lists]
+    _VtxCurrentIdx: u32;     // [Internal] generally == VtxBuffer.Size unless we are past 64K vertices, in which case this gets reset to 0.
+    _Data: *const DrawListSharedData,          // Pointer to shared draw data (you can use ImGui::GetDrawListSharedData() to get the one from current ImGui context)
+    _OwnerName: [*c]const u8,         // Pointer to owner window's name for debugging
+    _VtxWritePtr: *anyopaque,       // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
+    _IdxWritePtr: *anyopaque,       // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
+    ClipRectStack: ImVector,     // [Internal]
+    TextureIdStack: ImVector,    // [Internal]
+    Path: ImVector,              // [Internal] current path building
+    _CmdHeader: DrawCmdHeader,         // [Internal] template of active commands. Fields should match those of CmdBuffer.back().
+    _Splitter: DrawListSplitter,          // [Internal] for channels api (note: prefer using your own persistent instance of ImDrawListSplitter!)
+    _FringeScale: f32,       // [Internal] anti-alias fringe is scaled by this value, this helps to keep things sharp while zooming at vertex buffer content
+
+    // If you want to create ImDrawList instances, pass them ImGui::GetDrawListSharedData() or create and use your own ImDrawListSharedData (so you can use ImDrawList without ImGui)
+    //ImDrawList(const ImDrawListSharedData* shared_data) { memset(this, 0, sizeof(*this)); _Data = shared_data; }
+
+    //~ImDrawList() { _ClearFreeMemory(); }
+    //IMGUI_API void  PushClipRect(const ImVec2& clip_rect_min, const ImVec2& clip_rect_max, bool intersect_with_current_clip_rect = false);  // Render-level scissoring. This is passed down to your render function but not used for CPU-side coarse clipping. Prefer using higher-level ImGui::PushClipRect() to affect logic (hit-testing and widget culling)
+    //IMGUI_API void  PushClipRectFullScreen();
+    //IMGUI_API void  PopClipRect();
+    //IMGUI_API void  PushTextureID(ImTextureID texture_id);
+    //IMGUI_API void  PopTextureID();
+    //inline ImVec2   GetClipRectMin() const { const ImVec4& cr = _ClipRectStack.back(); return ImVec2(cr.x, cr.y); }
+    //inline ImVec2   GetClipRectMax() const { const ImVec4& cr = _ClipRectStack.back(); return ImVec2(cr.z, cr.w); }
+
+    // Primitives
+    // - Filled shapes must always use clockwise winding order. The anti-aliasing fringe depends on it. Counter-clockwise shapes will have "inward" anti-aliasing.
+    // - For rectangular primitives, "p_min" and "p_max" represent the upper-left and lower-right corners.
+    // - For circle primitives, use "num_segments == 0" to automatically calculate tessellation (preferred).
+    //   In older versions (until Dear ImGui 1.77) the AddCircle functions defaulted to num_segments == 12.
+    //   In future versions we will use textures to provide cheaper and higher-quality circles.
+    //   Use AddNgon() and AddNgonFilled() functions if you need to guaranteed a specific number of sides.
+    //IMGUI_API void  AddLine(const ImVec2& p1, const ImVec2& p2, ImU32 col, float thickness = 1.0f);
+    //IMGUI_API void  AddRect(const ImVec2& p_min, const ImVec2& p_max, ImU32 col, float rounding = 0.0f, ImDrawFlags flags = 0, float thickness = 1.0f);   // a: upper-left, b: lower-right (== upper-left + size)
+    //IMGUI_API void  AddRectFilled(const ImVec2& p_min, const ImVec2& p_max, ImU32 col, float rounding = 0.0f, ImDrawFlags flags = 0);                     // a: upper-left, b: lower-right (== upper-left + size)
+    //IMGUI_API void  AddRectFilledMultiColor(const ImVec2& p_min, const ImVec2& p_max, ImU32 col_upr_left, ImU32 col_upr_right, ImU32 col_bot_right, ImU32 col_bot_left);
+    //IMGUI_API void  AddQuad(const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, ImU32 col, float thickness = 1.0f);
+    //IMGUI_API void  AddQuadFilled(const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, ImU32 col);
+    //IMGUI_API void  AddTriangle(const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, ImU32 col, float thickness = 1.0f);
+    //IMGUI_API void  AddTriangleFilled(const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, ImU32 col);
+    //IMGUI_API void  AddCircle(const ImVec2& center, float radius, ImU32 col, int num_segments = 0, float thickness = 1.0f);
+    //IMGUI_API void  AddCircleFilled(const ImVec2& center, float radius, ImU32 col, int num_segments = 0);
+    //IMGUI_API void  AddNgon(const ImVec2& center, float radius, ImU32 col, int num_segments, float thickness = 1.0f);
+    //IMGUI_API void  AddNgonFilled(const ImVec2& center, float radius, ImU32 col, int num_segments);
+    //IMGUI_API void  AddText(const ImVec2& pos, ImU32 col, const char* text_begin, const char* text_end = NULL);
+    //IMGUI_API void  AddText(const ImFont* font, float font_size, const ImVec2& pos, ImU32 col, const char* text_begin, const char* text_end = NULL, float wrap_width = 0.0f, const ImVec4* cpu_fine_clip_rect = NULL);
+    //IMGUI_API void  AddPolyline(const ImVec2* points, int num_points, ImU32 col, ImDrawFlags flags, float thickness);
+    //IMGUI_API void  AddConvexPolyFilled(const ImVec2* points, int num_points, ImU32 col);
+    //IMGUI_API void  AddBezierCubic(const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, ImU32 col, float thickness, int num_segments = 0); // Cubic Bezier (4 control points)
+    //IMGUI_API void  AddBezierQuadratic(const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, ImU32 col, float thickness, int num_segments = 0);               // Quadratic Bezier (3 control points)
+
+    // Image primitives
+    // - Read FAQ to understand what ImTextureID is.
+    // - "p_min" and "p_max" represent the upper-left and lower-right corners of the rectangle.
+    // - "uv_min" and "uv_max" represent the normalized texture coordinates to use for those corners. Using (0,0)->(1,1) texture coordinates will generally display the entire texture.
+    //IMGUI_API void  AddImage(ImTextureID user_texture_id, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min = ImVec2(0, 0), const ImVec2& uv_max = ImVec2(1, 1), ImU32 col = IM_COL32_WHITE);
+    //IMGUI_API void  AddImageQuad(ImTextureID user_texture_id, const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, const ImVec2& uv1 = ImVec2(0, 0), const ImVec2& uv2 = ImVec2(1, 0), const ImVec2& uv3 = ImVec2(1, 1), const ImVec2& uv4 = ImVec2(0, 1), ImU32 col = IM_COL32_WHITE);
+    //IMGUI_API void  AddImageRounded(ImTextureID user_texture_id, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max, ImU32 col, float rounding, ImDrawFlags flags = 0);
+
+    // Stateful path API, add points then finish with PathFillConvex() or PathStroke()
+    // - Filled shapes must always use clockwise winding order. The anti-aliasing fringe depends on it. Counter-clockwise shapes will have "inward" anti-aliasing.
+    //inline    void  PathClear()                                                 { _Path.Size = 0; }
+    //inline    void  PathLineTo(const ImVec2& pos)                               { _Path.push_back(pos); }
+    //inline    void  PathLineToMergeDuplicate(const ImVec2& pos)                 { if (_Path.Size == 0 || memcmp(&_Path.Data[_Path.Size - 1], &pos, 8) != 0) _Path.push_back(pos); }
+    //inline    void  PathFillConvex(ImU32 col)                                   { AddConvexPolyFilled(_Path.Data, _Path.Size, col); _Path.Size = 0; }
+    //inline    void  PathStroke(ImU32 col, ImDrawFlags flags = 0, float thickness = 1.0f) { AddPolyline(_Path.Data, _Path.Size, col, flags, thickness); _Path.Size = 0; }
+    //IMGUI_API void  PathArcTo(const ImVec2& center, float radius, float a_min, float a_max, int num_segments = 0);
+    //IMGUI_API void  PathArcToFast(const ImVec2& center, float radius, int a_min_of_12, int a_max_of_12);                // Use precomputed angles for a 12 steps circle
+    //IMGUI_API void  PathBezierCubicCurveTo(const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, int num_segments = 0); // Cubic Bezier (4 control points)
+    //IMGUI_API void  PathBezierQuadraticCurveTo(const ImVec2& p2, const ImVec2& p3, int num_segments = 0);               // Quadratic Bezier (3 control points)
+    //IMGUI_API void  PathRect(const ImVec2& rect_min, const ImVec2& rect_max, float rounding = 0.0f, ImDrawFlags flags = 0);
+
+    // Advanced
+    //IMGUI_API void  AddCallback(ImDrawCallback callback, void* callback_data);  // Your rendering function must check for 'UserCallback' in ImDrawCmd and call the function instead of rendering triangles.
+    //IMGUI_API void  AddDrawCmd();                                               // This is useful if you need to forcefully create a new draw call (to allow for dependent rendering / blending). Otherwise primitives are merged into the same draw-call as much as possible
+    //IMGUI_API ImDrawList* CloneOutput() const;                                  // Create a clone of the CmdBuffer/IdxBuffer/VtxBuffer.
+
+    // Advanced: Channels
+    // - Use to split render into layers. By switching channels to can render out-of-order (e.g. submit FG primitives before BG primitives)
+    // - Use to minimize draw calls (e.g. if going back-and-forth between multiple clipping rectangles, prefer to append into separate channels then merge at the end)
+    // - FIXME-OBSOLETE: This API shouldn't have been in ImDrawList in the first place!
+    //   Prefer using your own persistent instance of ImDrawListSplitter as you can stack them.
+    //   Using the ImDrawList::ChannelsXXXX you cannot stack a split over another.
+    //inline void     ChannelsSplit(int count)    { _Splitter.Split(this, count); }
+    //inline void     ChannelsMerge()             { _Splitter.Merge(this); }
+    //inline void     ChannelsSetCurrent(int n)   { _Splitter.SetCurrentChannel(this, n); }
+
+    // Advanced: Primitives allocations
+    // - We render triangles (three vertices)
+    // - All primitives needs to be reserved via PrimReserve() beforehand.
+    //IMGUI_API void  PrimReserve(int idx_count, int vtx_count);
+    //IMGUI_API void  PrimUnreserve(int idx_count, int vtx_count);
+    //IMGUI_API void  PrimRect(const ImVec2& a, const ImVec2& b, ImU32 col);      // Axis aligned rectangle (composed of two triangles)
+    //IMGUI_API void  PrimRectUV(const ImVec2& a, const ImVec2& b, const ImVec2& uv_a, const ImVec2& uv_b, ImU32 col);
+    //IMGUI_API void  PrimQuadUV(const ImVec2& a, const ImVec2& b, const ImVec2& c, const ImVec2& d, const ImVec2& uv_a, const ImVec2& uv_b, const ImVec2& uv_c, const ImVec2& uv_d, ImU32 col);
+    //inline    void  PrimWriteVtx(const ImVec2& pos, const ImVec2& uv, ImU32 col)    { _VtxWritePtr->pos = pos; _VtxWritePtr->uv = uv; _VtxWritePtr->col = col; _VtxWritePtr++; _VtxCurrentIdx++; }
+    //inline    void  PrimWriteIdx(ImDrawIdx idx)                                     { *_IdxWritePtr = idx; _IdxWritePtr++; }
+    //inline    void  PrimVtx(const ImVec2& pos, const ImVec2& uv, ImU32 col)         { PrimWriteIdx((ImDrawIdx)_VtxCurrentIdx); PrimWriteVtx(pos, uv, col); } // Write vertex with unique index
+
+    // [Internal helpers]
+    //IMGUI_API void  _ResetForNewFrame();
+    //IMGUI_API void  _ClearFreeMemory();
+    //IMGUI_API void  _PopUnusedDrawCmd();
+    //IMGUI_API void  _TryMergeDrawCmds();
+    //IMGUI_API void  _OnChangedClipRect();
+    //IMGUI_API void  _OnChangedTextureID();
+    //IMGUI_API void  _OnChangedVtxOffset();
+    //IMGUI_API int   _CalcCircleAutoSegmentCount(float radius) const;
+    //IMGUI_API void  _PathArcToFastEx(const ImVec2& center, float radius, int a_min_sample, int a_max_sample, int a_step);
+    //IMGUI_API void  _PathArcToN(const ImVec2& center, float radius, float a_min, float a_max, int num_segments);
+};
+
+// Transient per-window flags, reset at the beginning of the frame. For child window, inherited from parent on first Begin().
+// This is going to be exposed in imgui.h when stabilized enough.
+pub const ItemFlags = enum(c_int) {
+    // Controlled by user
+    None                     = 0,
+    NoTabStop                = 1 << 0,  // false     // Disable keyboard tabbing (FIXME: should merge with _NoNav)
+    ButtonRepeat             = 1 << 1,  // false     // Button() will return true multiple times based on io.KeyRepeatDelay and io.KeyRepeatRate settings.
+    Disabled                 = 1 << 2,  // false     // Disable interactions but doesn't affect visuals. See BeginDisabled()/EndDisabled(). See github.com/ocornut/imgui/issues/211
+    NoNav                    = 1 << 3,  // false     // Disable keyboard/gamepad directional navigation (FIXME: should merge with _NoTabStop)
+    NoNavDefaultFocus        = 1 << 4,  // false     // Disable item being a candidate for default focus (e.g. used by title bar items)
+    SelectableDontClosePopup = 1 << 5,  // false     // Disable MenuItem/Selectable() automatically closing their popup window
+    MixedValue               = 1 << 6,  // false     // [BETA] Represent a mixed/indeterminate value, generally multi-selection where values differ. Currently only supported by Checkbox() (later should support all sorts of widgets)
+    ReadOnly                 = 1 << 7,  // false     // [ALPHA] Allow hovering interactions but underlying value is not changed.
+
+    // Controlled by widget code
+    Inputable                = 1 << 8,  // false     // [WIP] Auto-activate input mode when tab focused. Currently only used and supported by a few items before it becomes a generic feature.
+};
+
 // Windows
 // - Begin() = push window to the stack and start appending to it. End() = pop window from the stack.
 // - Passing 'bool* p_open != NULL' shows a window-closing widget in the upper-right corner of the window,
@@ -54,18 +1048,23 @@ pub const Context = struct {
 pub fn begin(name: [*c]const u8, open: *bool, flags: WindowFlags) bool {
     return ImGui_Begin(name, open, flags);
 }
-pub extern fn ImGui_Begin(name: [*c]const u8, open: *bool, flags: WindowFlags) bool;
+extern fn ImGui_Begin(name: [*c]const u8, open: *bool, flags: WindowFlags) bool;
 
 pub fn end() void {
     ImGui_End();
 }
-pub extern fn ImGui_End() void;
+extern fn ImGui_End() void;
 
 // NOTE: No formatting, unlike regular Imgui function.
-pub fn text(txt: [*c]const u8) void {
-    ImGui_Text(txt);
+pub fn text(txt: []const u8) void {
+    ImGui_Text(txt.ptr, txt.len);
 }
-pub extern fn ImGui_Text(fmt: [*c]const u8) void;
+extern fn ImGui_Text(fmt: [*c]const u8, usize) void;
+
+pub fn textColored(color: Vec4, txt: [*c]const u8) void {
+    ImGui_TextColored(&color, txt);
+}
+extern fn ImGui_TextColored(Vec4, [*c]const u8) void;
 
 pub const kNoWrap: f32 = -1.0;
 
@@ -82,7 +1081,32 @@ pub fn button(label: [*c]const u8, size: ?Vec2) bool {
         return ImGui_Button(label, Vec2{.x = 0, .y = 0});
     }
 }
-pub extern fn ImGui_Button(label: [*c]const u8, size: Vec2) bool;
+extern fn ImGui_Button(label: [*c]const u8, size: Vec2) bool;
+
+/// @param fmt Default = "%d"
+pub fn sliderInt(label: [*c]const u8, v: *c_int, v_min: c_int, v_max: c_int, fmt: [*c]const u8, flags: SliderFlags) bool {
+    return ImGui_SliderInt(label, v, v_min, v_max, fmt, flags);
+}
+extern fn ImGui_SliderInt([*c]const u8, *c_int, c_int, c_int, [*c]const u8, SliderFlags) bool;
+
+pub fn inputText(label: [*c]const u8, buf: []u8, flags: InputTextFlags) bool {
+    return ImGui_InputText(label, buf.ptr, buf.len, flags);
+}
+extern fn ImGui_InputText([*c]const u8, []u8, InputTextFlags) bool;
+
+// separator, generally horizontal. inside a menu bar or in horizontal layout mode, this becomes a vertical separator.
+pub fn separator() void {
+    ImGui_Separator();
+}
+extern fn ImGui_Separator() void;
+
+// call between widgets or groups to layout them horizontally. X position given in window coordinates.
+// @param offset_from_start Default = 0
+// @param spacing Default = -1
+pub fn sameLine(offset_from_start: f32, spacing: f32) void {
+    ImGui_SameLine(offset_from_start, spacing);
+}
+extern fn ImGui_SameLine(f32, f32) void;
 
 pub const DrawData = struct {
     data: *anyopaque,
@@ -111,6 +1135,41 @@ pub const Vec4 = extern struct {
     z: f32,
     w: f32,
 };
+
+pub const Vec2ih = extern struct {
+    x: u16,
+    y: u16,
+};
+
+pub const Rect = extern struct {
+    min: Vec2,
+    max: Vec2,
+
+    //ImVec2      GetCenter() const                   { return ImVec2((Min.x + Max.x) * 0.5f, (Min.y + Max.y) * 0.5f); }
+    //ImVec2      GetSize() const                     { return ImVec2(Max.x - Min.x, Max.y - Min.y); }
+    //float       GetWidth() const                    { return Max.x - Min.x; }
+    //float       GetHeight() const                   { return Max.y - Min.y; }
+    //float       GetArea() const                     { return (Max.x - Min.x) * (Max.y - Min.y); }
+    //ImVec2      GetTL() const                       { return Min; }                   // Top-left
+    //ImVec2      GetTR() const                       { return ImVec2(Max.x, Min.y); }  // Top-right
+    //ImVec2      GetBL() const                       { return ImVec2(Min.x, Max.y); }  // Bottom-left
+    //ImVec2      GetBR() const                       { return Max; }                   // Bottom-right
+    //bool        Contains(const ImVec2& p) const     { return p.x     >= Min.x && p.y     >= Min.y && p.x     <  Max.x && p.y     <  Max.y; }
+    //bool        Contains(const ImRect& r) const     { return r.Min.x >= Min.x && r.Min.y >= Min.y && r.Max.x <= Max.x && r.Max.y <= Max.y; }
+    //bool        Overlaps(const ImRect& r) const     { return r.Min.y <  Max.y && r.Max.y >  Min.y && r.Min.x <  Max.x && r.Max.x >  Min.x; }
+    //void        Add(const ImVec2& p)                { if (Min.x > p.x)     Min.x = p.x;     if (Min.y > p.y)     Min.y = p.y;     if (Max.x < p.x)     Max.x = p.x;     if (Max.y < p.y)     Max.y = p.y; }
+    //void        Add(const ImRect& r)                { if (Min.x > r.Min.x) Min.x = r.Min.x; if (Min.y > r.Min.y) Min.y = r.Min.y; if (Max.x < r.Max.x) Max.x = r.Max.x; if (Max.y < r.Max.y) Max.y = r.Max.y; }
+    //void        Expand(const float amount)          { Min.x -= amount;   Min.y -= amount;   Max.x += amount;   Max.y += amount; }
+    //void        Expand(const ImVec2& amount)        { Min.x -= amount.x; Min.y -= amount.y; Max.x += amount.x; Max.y += amount.y; }
+    //void        Translate(const ImVec2& d)          { Min.x += d.x; Min.y += d.y; Max.x += d.x; Max.y += d.y; }
+    //void        TranslateX(float dx)                { Min.x += dx; Max.x += dx; }
+    //void        TranslateY(float dy)                { Min.y += dy; Max.y += dy; }
+    //void        ClipWith(const ImRect& r)           { Min = ImMax(Min, r.Min); Max = ImMin(Max, r.Max); }                   // Simple version, may lead to an inverted rectangle, which is fine for Contains/Overlaps test but not for display.
+    //void        ClipWithFull(const ImRect& r)       { Min = ImClamp(Min, r.Min, r.Max); Max = ImClamp(Max, r.Min, r.Max); } // Full version, ensure both points are fully clipped.
+    //void        Floor()                             { Min.x = IM_FLOOR(Min.x); Min.y = IM_FLOOR(Min.y); Max.x = IM_FLOOR(Max.x); Max.y = IM_FLOOR(Max.y); }
+    //bool        IsInverted() const                  { return Min.x > Max.x || Min.y > Max.y; }
+    //ImVec4      ToVec4() const                      { return ImVec4(Min.x, Min.y, Max.x, Max.y); }
+}
 
 pub const IM_DRAWLIST_TEX_LINES_WIDTH_MAX = 63;
 
@@ -203,6 +1262,16 @@ pub fn popFont() void {
     ImGui_PopFont();
 }
 extern fn ImGui_PopFont() void;
+
+pub fn pushStyleColor(slot: Col, color: Vec4) void {
+    ImGui_PushStyleColor(slot, color);
+}
+extern fn ImGui_PushStyleColor(Col, Vec4) void;
+
+pub fn popStyleColor(count: c_int) void {
+    ImGui_PopStyleColor(count);
+}
+extern fn ImGui_PopStyleColor(c_int) void;
 
 //-----------------------------------------------------------------------------
 // [SECTION] Font API (ImFontConfig, ImFontGlyph, ImFontAtlasFlags, ImFontAtlas, ImFontGlyphRangesBuilder, ImFont)
@@ -324,7 +1393,7 @@ pub const WindowFlags = enum(c_int) {
     NoMove                 = 1 << 2,   // Disable user moving the window
     NoScrollbar            = 1 << 3,   // Disable scrollbars (window can still scroll with mouse or programmatically)
     NoScrollWithMouse      = 1 << 4,   // Disable user vertically scrolling with mouse wheel. On child window, mouse wheel will be forwarded to the parent unless NoScrollbar is also set.
-    NoCollapse             = 1 << 5,   // Disable user collapsing window by double-clicking on it. Also referred to as Window Menu Button (e.g. within a docking node).
+    NoCollapse             = 1 << 5,   // Disable user collapsing window by clicking on it. Also referred to as Window Menu Button (e.g. within a docking node).
     AlwaysAutoResize       = 1 << 6,   // Resize every window to its content every frame
     NoBackground           = 1 << 7,   // Disable drawing background color (WindowBg, etc.) and outside border. Similar as using SetNextWindowBgAlpha(0.0f).
     NoSavedSettings        = 1 << 8,   // Never load/save settings in .ini file
@@ -447,16 +1516,43 @@ pub const Col = enum(c_int) {
     COUNT
 };
 
-// A cardinal direction
-pub const Dir = enum(c_int) {
-        None    = -1,
-        Left    = 0,
-        Right   = 1,
-        Up      = 2,
-        Down    = 3,
-        COUNT
+// Flags for DragFloat(), DragInt(), SliderFloat(), SliderInt() etc.
+// We use the same sets of flags for DragXXX() and SliderXXX() functions as the features are the same and it makes it easier to swap them.
+pub const SliderFlags = enum(c_int)
+{
+    None                   = 0,
+    AlwaysClamp            = 1 << 4,       // Clamp value to min/max bounds when input manually with CTRL+Click. By default CTRL+Click allows going out of bounds.
+    Logarithmic            = 1 << 5,       // Make the widget logarithmic (linear otherwise). Consider using NoRoundToFormat with this if using a format-string with small amount of digits.
+    NoRoundToFormat        = 1 << 6,       // Disable rounding underlying value to match precision of the display format string (e.g. %.3f values are rounded to those 3 digits)
+    NoInput                = 1 << 7,       // Disable CTRL+Click or Enter key allowing to input text directly into the widget
+    InvalidMask_           = 0x7000000F,   // [Internal] We treat using those bits as being potentially a 'float power' argument from the previous API that has got miscast to this enum, and will trigger an assert if needed.
 };
 
+// Flags for ImGui::InputText()
+pub const InputTextFlags = enum(c_int)
+{
+    None                = 0,
+    CharsDecimal        = 1 << 0,   // Allow 0123456789.+-*/
+    CharsHexadecimal    = 1 << 1,   // Allow 0123456789ABCDEFabcdef
+    CharsUppercase      = 1 << 2,   // Turn a..z into A..Z
+    CharsNoBlank        = 1 << 3,   // Filter out spaces, tabs
+    AutoSelectAll       = 1 << 4,   // Select entire text when first taking mouse focus
+    EnterReturnsTrue    = 1 << 5,   // Return 'true' when Enter is pressed (as opposed to every time the value was modified). Consider looking at the IsItemDeactivatedAfterEdit() function.
+    CallbackCompletion  = 1 << 6,   // Callback on pressing TAB (for completion handling)
+    CallbackHistory     = 1 << 7,   // Callback on pressing Up/Down arrows (for history handling)
+    CallbackAlways      = 1 << 8,   // Callback on each iteration. User code may query cursor position, modify text buffer.
+    CallbackCharFilter  = 1 << 9,   // Callback on character inputs to replace or discard them. Modify 'EventChar' to replace or discard, or return 1 in callback to discard.
+    AllowTabInput       = 1 << 10,  // Pressing TAB input a '\t' character into the text field
+    CtrlEnterForNewLine = 1 << 11,  // In multi-line mode, unfocus with Enter, add new line with Ctrl+Enter (default is opposite: unfocus with Ctrl+Enter, add line with Enter).
+    NoHorizontalScroll  = 1 << 12,  // Disable following the cursor horizontally
+    AlwaysOverwrite     = 1 << 13,  // Overwrite mode
+    ReadOnly            = 1 << 14,  // Read-only mode
+    Password            = 1 << 15,  // Password mode, display all characters as '*'
+    NoUndoRedo          = 1 << 16,  // Disable undo/redo. Note that input text owns the text data while active, if you want to provide your own undo/redo stack you need e.g. to call ClearActiveID().
+    CharsScientific     = 1 << 17,  // Allow 0123456789.+-*/eE (Scientific notation input)
+    CallbackResize      = 1 << 18,  // Callback on buffer capacity changes request (beyond 'buf_size' parameter value), allowing the string to grow. Notify when the string wants to be resized (for string types which hold a cache of their Size). You will be provided a new BufSize in the callback and NEED to honor it. (see misc/cpp/imgui_stdlib.h for an example of using this)
+    CallbackEdit        = 1 << 19,  // Callback on any edit (note that InputText() already returns true on edit, the callback is useful mainly to manipulate the underlying buffer while focus is active)
+};
 
 //-----------------------------------------------------------------------------
 // [SECTION] ImGuiStyle
@@ -473,7 +1569,7 @@ pub const Style = extern struct {
     WindowBorderSize: f32,           // Thickness of border around windows. Generally set to 0.0f or 1.0f. (Other values are not well tested and more CPU/GPU costly).
     WindowMinSize: Vec2,              // Minimum window size. This is a global setting. If you want to constraint individual windows, use SetNextWindowSizeConstraints().
     WindowTitleAlign: Vec2,           // Alignment for title bar text. Defaults to (0.0f,0.5f) for left-aligned,vertically centered.
-    WindowMenuButtonPosition: Dir,   // Side of the collapsing/docking button in the title bar (None/Left/Right). Defaults to ImGuiDir_Left.
+    WindowMenuButtonPosition: Dir,   // Side of the collapsing/docking button in the title bar (None/Left/Right). Defaults to Left.
     ChildRounding: f32,              // Radius of child window corners rounding. Set to 0.0f to have rectangular windows.
     ChildBorderSize: f32,            // Thickness of border around child windows. Generally set to 0.0f or 1.0f. (Other values are not well tested and more CPU/GPU costly).
     PopupRounding: f32,              // Radius of popup window corners rounding. (Note that tooltip windows use WindowRounding)
@@ -819,6 +1915,18 @@ pub const ImVector = extern struct {
     Data: *anyopaque,
 };
 
+// Helper: ImPool<>
+// Basic keyed storage for contiguous instances, slow/amortized insertion, O(1) indexable, O(Log N) queries by ID over a dense/hot buffer,
+// Honor constructor/destructor. Add/remove invalidate all pointers. Indexes have the same lifetime as the associated object.
+pub const ImPoolIdx = c_int;
+
+pub const ImPool = extern struct {
+    Buf: ImVector,        // Contiguous data
+    Map: Storage,        // ID->Index
+    FreeIdx: ImPoolIdx,    // Next free idx to use
+    AliveCount: ImPoolIdx, // Number of active/alive items (for display purpose)
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // Main
 //
@@ -827,19 +1935,18 @@ pub const ImVector = extern struct {
 pub fn newFrame() void {
     ImGui_NewFrame();
 }
+extern fn ImGui_NewFrame() void;
 
 // ends the Dear ImGui frame. automatically called by Render(). If you don't need to render data (skipping rendering) you may call EndFrame() without Render()... but you'll have wasted CPU already! If you don't need to render, better to not create any windows and not call NewFrame() at all!
 pub fn endFrame() void {
     ImGui_EndFrame();
 }
+extern fn ImGui_EndFrame() void;
 
 // ends the Dear ImGui frame, finalize the draw data. You can then get call GetDrawData().
 pub fn render() void {
     ImGui_Render();
 }
-
-extern fn ImGui_NewFrame() void;
-extern fn ImGui_EndFrame() void;
 extern fn ImGui_Render() void;
 
 ///////////////////////////////////////////////////////////////////////////////
