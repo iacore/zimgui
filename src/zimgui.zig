@@ -4,43 +4,6 @@ const std = @import("std");
 
 pub const ID = u32; // A unique ID used by widgets (typically the result of hashing a stack of string)
 
-// Context creation and access
-// - Each context create its own ImFontAtlas by default. You may instance one yourself and pass it to CreateContext() to share a font atlas between contexts.
-// - DLL users: heaps and globals are not shared across DLL boundaries! You will need to call SetCurrentContext() + SetAllocatorFunctions()
-//   for each static/DLL boundary you are calling from. Read "Context and Memory Allocators" section of imgui.cpp for details.
-pub const Context = struct {
-    data: *anyopaque,
-
-    pub fn init() Context {
-        return Context{.data = ImGui_CreateContext(null)};
-    }
-    extern fn ImGui_CreateContext(shared_font_atlas: ?*anyopaque) *anyopaque;
-
-    // TODO cgustafsson:
-    pub fn initWithFontAtlas() Context {
-        unreachable;
-    }
-
-    pub fn deinit(context: Context) void {
-        ImGui_DestoryContext(context.data);
-    }
-    extern fn ImGui_DestoryContext(context: *anyopaque) void;
-
-    pub fn deinitCurrent() void {
-        ImGui_DestoryContext(null);
-    }
-
-    pub fn current() Context {
-        return Context{.data = ImGui_GetCurrentContext()};
-    }
-    extern fn ImGui_GetCurrentContext() *anyopaque;
-
-    pub fn setCurrent(context: Context) void {
-        ImGui_SetCurrentContext(context.data);
-    }
-    extern fn ImGui_SetCurrentContext(context: *anyopaque) void;
-};
-
 // Flags for ImDrawList instance. Those are set automatically by ImGui:: functions from ImGuiIO settings, and generally not manipulated directly.
 // It is however possible to temporarily alter flags between calls to ImDrawList:: functions.
 pub const DrawListFlags = enum(c_int) {
@@ -142,7 +105,7 @@ pub const DrawListSharedData = extern struct {
     ArcFastVtx: [IM_DRAWLIST_ARCFAST_TABLE_SIZE]Vec2, // Sample points on the quarter of the circle.
     ArcFastRadiusCutoff: f32,                        // Cutoff radius after which arc drawing will fallback to slower PathArcTo()
     CircleSegmentCounts: [64]u8,    // Precomputed segment count for given radius before we calculate it dynamically (to avoid calculation overhead)
-    TexUvLines: *const Vec4;                 // UV of anti-aliased lines in the atlas
+    TexUvLines: *const Vec4,                 // UV of anti-aliased lines in the atlas
 
     //ImDrawListSharedData();
     //void SetCircleTessellationMaxError(float max_error);
@@ -187,7 +150,7 @@ pub const Payload = extern struct {
     DataSize: c_int,           // Data size
 
     // [Internal]
-    SourceId: ID;           // Source item id
+    SourceId: ID,           // Source item id
     SourceParentId: ID,     // Source parent id (if available)
     DataFrameCount: c_int,     // Data timestamp
     DataType: [32 + 1]u8,   // Data type tag (short user-supplied string, 32 characters max)
@@ -259,7 +222,7 @@ pub const Cond = enum(c_int){
 };
 
 pub const NextItemData = extern struct {
-    Flags: ItemDataFlags,
+    Flags: NextItemDataFlags,
     Width: f32,          // Set by SetNextItemWidth()
     FocusScopeId: ID,   // Set by SetNextItemMultiSelectData() (!= 0 signify value has been set, so it's an alternate version of HasSelectionData, we don't use Flags for this because they are cleared too early. This is mostly used for debugging)
     OpenCond: Cond,
@@ -286,7 +249,7 @@ pub const ItemStatusFlags = enum(c_int) {
 // Status storage for the last submitted item
 pub const LastItemData = extern struct {
     id: ID,
-    InFlags: ItemFlags;            // See ImGuiItemFlags_
+    InFlags: ItemFlags,            // See ImGuiItemFlags_
     StatusFlags: ItemStatusFlags,        // See ImGuiItemStatusFlags_
     rect: Rect,               // Full rectangle
     NavRect: Rect,            // Navigation scoring rectangle (not displayed)
@@ -373,7 +336,7 @@ pub const STB_TexteditState = extern struct {
     padding2: u8,
     padding3: u8,
     preferred_x: f32, // this determines where the cursor up/down tries to seek to along x
-   StbUndoState undostate;
+    undostate: StbUndoState,
 };
 
 const STB_TEXTEDIT_POSITIONTYPE = c_int;
@@ -393,7 +356,7 @@ const STB_TEXTEDIT_CHARTYPE = c_int;
 pub const StbUndoState = extern struct {
     // private data
     undo_rec: [STB_TEXTEDIT_UNDOSTATECOUNT]StbUndoRecord,
-    undo_char: [STB_TEXTEDIT_UNDOCHARCOUNT]STB_TEXTEDIT_CHARTYPE;
+    undo_char: [STB_TEXTEDIT_UNDOCHARCOUNT]STB_TEXTEDIT_CHARTYPE,
     undo_point: u16,
     redo_point: u16,
     undo_char_point: c_int,
@@ -418,6 +381,13 @@ pub const ComboPreviewData = extern struct {
 
     //ImGuiComboPreviewData() { memset(this, 0, sizeof(*this)); }
 };
+
+pub fn ImBitArray(bitcount: c_int, offset: c_int) type {
+    _ = offset;
+    return extern struct {
+        storage: [(bitcount + 31) >> 5]u32,
+    };
+}
 
 // Internal state of the currently focused/edited text input box
 // For a given item ID, access with ImGui::GetInputTextState()
@@ -456,7 +426,147 @@ pub const InputTextState = extern struct {
     //void        SelectAll()                 { Stb.select_start = 0; Stb.cursor = Stb.select_end = CurLenW; Stb.has_preferred_x = 0; }
 };
 
+// (Optional) Support for IME (Input Method Editor) via the io.SetPlatformImeDataFn() function.
+pub const PlatformImeData = extern struct {
+    WantVisible: bool,        // A widget wants the IME to be visible
+    InputPos: Vec2,           // Position of the input cursor
+    InputLineHeight: f32,    // Line height
+
+    //ImGuiPlatformImeData() { memset(this, 0, sizeof(*this)); }
+};
+
+// Helper: Growable text buffer for logging/accumulating text
+// (this could be called 'ImGuiTextBuilder' / 'ImGuiStringBuilder')
+pub const TextBuffer = extern struct {
+    Buf: ImVector,
+    const EmptyString: [1]u8 = u8{0};
+
+    //ImGuiTextBuffer()   { }
+    //inline char         operator[](int i) const { IM_ASSERT(Buf.Data != NULL); return Buf.Data[i]; }
+    //const char*         begin() const           { return Buf.Data ? &Buf.front() : EmptyString; }
+    //const char*         end() const             { return Buf.Data ? &Buf.back() : EmptyString; }   // Buf is zero-terminated, so end() will point on the zero-terminator
+    //int                 size() const            { return Buf.Size ? Buf.Size - 1 : 0; }
+    //bool                empty() const           { return Buf.Size <= 1; }
+    //void                clear()                 { Buf.clear(); }
+    //void                reserve(int capacity)   { Buf.reserve(capacity); }
+    //const char*         c_str() const           { return Buf.Data ? Buf.Data : EmptyString; }
+    //IMGUI_API void      append(const char* str, const char* str_end = NULL);
+    //IMGUI_API void      appendf(const char* fmt, ...) IM_FMTARGS(2);
+    //IMGUI_API void      appendfv(const char* fmt, va_list args) IM_FMTLIST(2);
+};
+
+// Helper: ImChunkStream<>
+// Build and iterate a contiguous stream of variable-sized structures.
+// This is used by Settings to store persistent data while reducing allocation count.
+// We store the chunk size first, and align the final size on 4 bytes boundaries.
+// The tedious/zealous amount of casting is to avoid -Wcast-align warnings.
+pub const ImChunkStream = extern struct {
+    Buf: ImVector,
+
+    //void    clear()                     { Buf.clear(); }
+    //bool    empty() const               { return Buf.Size == 0; }
+    //int     size() const                { return Buf.Size; }
+    //T*      alloc_chunk(size_t sz)      { size_t HDR_SZ = 4; sz = IM_MEMALIGN(HDR_SZ + sz, 4u); int off = Buf.Size; Buf.resize(off + (int)sz); ((int*)(void*)(Buf.Data + off))[0] = (int)sz; return (T*)(void*)(Buf.Data + off + (int)HDR_SZ); }
+    //T*      begin()                     { size_t HDR_SZ = 4; if (!Buf.Data) return NULL; return (T*)(void*)(Buf.Data + HDR_SZ); }
+    //T*      next_chunk(T* p)            { size_t HDR_SZ = 4; IM_ASSERT(p >= begin() && p < end()); p = (T*)(void*)((char*)(void*)p + chunk_size(p)); if (p == (T*)(void*)((char*)end() + HDR_SZ)) return (T*)0; IM_ASSERT(p < end()); return p; }
+    //int     chunk_size(const T* p)      { return ((const int*)p)[-1]; }
+    //T*      end()                       { return (T*)(void*)(Buf.Data + Buf.Size); }
+    //int     offset_from_ptr(const T* p) { IM_ASSERT(p >= begin() && p < end()); const ptrdiff_t off = (const char*)p - Buf.Data; return (int)off; }
+    //T*      ptr_from_offset(int off)    { IM_ASSERT(off >= 4 && off < Buf.Size); return (T*)(void*)(Buf.Data + off); }
+    //void    swap(ImChunkStream<T>& rhs) { rhs.Buf.swap(Buf); }
+
+};
+
+pub const ImFileHandle = *anyopaque;
+
+pub const ImGuiLogType = enum(c_int) {
+    None = 0,
+    TTY,
+    File,
+    Buffer,
+    Clipboard,
+};
+
+pub const DebugLogFlags = enum(c_int) {
+    // Event types
+    None             = 0,
+    EventActiveId    = 1 << 0,
+    EventFocus       = 1 << 1,
+    EventPopup       = 1 << 2,
+    EventNav         = 1 << 3,
+    EventIO          = 1 << 4,
+    //EventMask_       = EventActiveId  | EventFocus | EventPopup | EventNav | EventIO,
+    EventMask_       = 1 << 0  | 1 << 1 | 1 << 2 | 1 << 3 | 1 << 4,
+    OutputToTTY      = 1 << 10,  // Also send output to TTY
+};
+
+pub const MetricsConfig = extern struct {
+    ShowDebugLog: bool,
+    ShowStackTool: bool,
+    ShowWindowsRects: bool,
+    ShowWindowsBeginOrder: bool,
+    ShowTablesRects: bool,
+    ShowDrawCmdMesh: bool,
+    ShowDrawCmdBoundingBoxes: bool,
+    ShowWindowsRectsType: c_int,
+    ShowTablesRectsType: c_int,
+
+    //ImGuiMetricsConfig()
+    //{
+    //    ShowDebugLog = ShowStackTool = ShowWindowsRects = ShowWindowsBeginOrder = ShowTablesRects = false;
+    //    ShowDrawCmdMesh = true;
+    //    ShowDrawCmdBoundingBoxes = true;
+    //    ShowWindowsRectsType = ShowTablesRectsType = -1;
+    //}
+};
+
+// State for Stack tool queries
+pub const StackTool = extern struct {
+    LastActiveFrame: c_int,
+    StackLevel: c_int,                 // -1: query stack and resize Results, >= 0: individual stack level
+    QueryId: ID,                    // ID to query details for
+    Results: ImVector,
+    CopyToClipboardOnCtrlC: bool,
+    CopyToClipboardLastTime: f32,
+
+    //ImGuiStackTool()        { memset(this, 0, sizeof(*this)); CopyToClipboardLastTime = -FLT_MAX; }
+};
+
+// Context creation and access
+// - Each context create its own ImFontAtlas by default. You may instance one yourself and pass it to CreateContext() to share a font atlas between contexts.
+// - DLL users: heaps and globals are not shared across DLL boundaries! You will need to call SetCurrentContext() + SetAllocatorFunctions()
+//   for each static/DLL boundary you are calling from. Read "Context and Memory Allocators" section of imgui.cpp for details.
 pub const Context = extern struct {
+
+    pub fn init() *Context {
+        return ImGui_CreateContext(null);
+    }
+    extern fn ImGui_CreateContext(shared_font_atlas: ?*anyopaque) *anyopaque;
+
+    // TODO cgustafsson:
+    pub fn initWithFontAtlas() Context {
+        unreachable;
+    }
+
+    pub fn deinit(context: Context) void {
+        ImGui_DestoryContext(context.data);
+    }
+    extern fn ImGui_DestoryContext(context: *anyopaque) void;
+
+    pub fn deinitCurrent() void {
+        ImGui_DestoryContext(null);
+    }
+
+    pub fn current() Context {
+        return Context{.data = ImGui_GetCurrentContext()};
+    }
+    extern fn ImGui_GetCurrentContext() *anyopaque;
+
+    pub fn setCurrent(context: Context) void {
+        ImGui_SetCurrentContext(context.data);
+    }
+    extern fn ImGui_SetCurrentContext(context: *anyopaque) void;
+
     Initialized: bool,
     FontAtlasOwnedByContext: bool,            // IO.Fonts-> is owned by the ImGuiContext and will be destructed along with it.
     io: IO,
@@ -466,7 +576,7 @@ pub const Context = extern struct {
     font: *Font,                               // (Shortcut) == FontStack.empty() ? IO.Font : FontStack.back()
     FontSize: f32,                           // (Shortcut) == FontBaseSize * g.CurrentWindow->FontWindowScale == window->FontSize(). Text height for current window.
     FontBaseSize: f32,                       // (Shortcut) == IO.FontGlobalScale * Font->Scale * Font->FontSize. Base text height.
-    DrawListSharedData: ListSharedData,
+    draw_list_shared_data: DrawListSharedData,
     Time: f64,
     FrameCount: c_int,
     FrameCountEnded: c_int,
@@ -486,7 +596,7 @@ pub const Context = extern struct {
     WindowsById: Storage,                        // Map window's ImGuiID to ImGuiWindow*
     WindowsActiveCount: c_int,                 // Number of unique windows submitted by frame
     WindowsHoverPadding: Vec2,                // Padding around resizable windows for which hovering on counts as hovering the window == ImMax(style.TouchExtraPadding, WINDOWS_HOVER_PADDING)
-    CurrentWindow: *Window,                      // Window being drawn into
+    current_window: *Window,                      // Window being drawn into
     HoveredWindow: *Window,                      // Window the mouse is hovering. Will typically catch mouse inputs.
     HoveredWindowUnderMovingWindow: *Window,     // Hovered window ignoring MovingWindow. Only set if MovingWindow is set.
     MovingWindow: *Window,                       // Track the window we clicked on (in order to preserve focus). The actual window that is moved is generally MovingWindow->RootWindow.
@@ -526,7 +636,7 @@ pub const Context = extern struct {
 
     // Input Ownership
     ActiveIdUsingNavDirMask: u32,            // Active widget will want to read those nav move requests (e.g. can activate a button and move away from it)
-    ImBitArrayForNamedKeys  ActiveIdUsingKeyInputMask;          // Active widget will want to read those key inputs. When we grow the ImGuiKey enum we'll need to either to order the enum to make useful keys come first, either redesign this into e.g. a small array.
+    ActiveIdUsingKeyInputMask: ImBitArray(Key_NamedKey_COUNT, -Key_NamedKey_BEGIN),          // Active widget will want to read those key inputs. When we grow the ImGuiKey enum we'll need to either to order the enum to make useful keys come first, either redesign this into e.g. a small array.
 
     // Next window/item data
     CurrentItemFlags: ItemFlags,                   // == g.ItemFlagsStack.back()
@@ -673,27 +783,27 @@ pub const Context = extern struct {
     MenusIdSubmittedThisFrame: ImVector,          // A list of menu IDs that were rendered at least once
 
     // Platform support
-    ImGuiPlatformImeData    PlatformImeData;                    // Data updated by current frame
-    ImGuiPlatformImeData    PlatformImeDataPrev;                // Previous frame data (when changing we will call io.SetPlatformImeDataFn
-    char                    PlatformLocaleDecimalPoint;         // '.' or *localeconv()->decimal_point
+    PlatformImeData: PlatformImeData,                    // Data updated by current frame
+    PlatformImeDataPrev: PlatformImeData,                // Previous frame data (when changing we will call io.SetPlatformImeDataFn
+    PlatformLocaleDecimalPoint: u8,         // '.' or *localeconv()->decimal_point
 
     // Settings
     SettingsLoaded: bool,
     SettingsDirtyTimer: f32,                 // Save .ini Settings to memory when time reaches zero
-    ImGuiTextBuffer         SettingsIniData;                    // In memory .ini settings
+    SettingsIniData: TextBuffer,                    // In memory .ini settings
     SettingsHandlers: ImVector,       // List of .ini settings handlers
-    ImChunkStream<ImGuiWindowSettings>  SettingsWindows;        // ImGuiWindow .ini settings entries
-    ImChunkStream<ImGuiTableSettings>   SettingsTables;         // ImGuiTable .ini settings entries
+    SettingsWindows: ImChunkStream,        // ImGuiWindow .ini settings entries
+    SettingsTables: ImChunkStream,         // ImGuiTable .ini settings entries
     Hooks: ImVector,                  // Hooks for extensions (e.g. test engine)
     HookIdNext: ID,             // Next available HookId
 
     // Capture/Logging
     LogEnabled: bool,                         // Currently capturing
-    ImGuiLogType            LogType;                            // Capture target
-    ImFileHandle            LogFile;                            // If != NULL log to stdout/ file
-    ImGuiTextBuffer         LogBuffer;                          // Accumulation buffer when log to clipboard. This is pointer so our GImGui static constructor doesn't call heap allocators.
-    const char*             LogNextPrefix;
-    const char*             LogNextSuffix;
+    LogType: ImGuiLogType,                            // Capture target
+    LogFile: ImFileHandle,                            // If != NULL log to stdout/ file
+    LogBuffer: TextBuffer,                          // Accumulation buffer when log to clipboard. This is pointer so our GImGui static constructor doesn't call heap allocators.
+    LogNextPrefix: [*c]const u8,
+    LogNextSuffix: [*c]const u8,
     LogLinePosY: f32,
     LogLineFirstItem: bool,
     LogDepthRef: c_int,
@@ -701,13 +811,13 @@ pub const Context = extern struct {
     LogDepthToExpandDefault: c_int,            // Default/stored value for LogDepthMaxExpand if not specified in the LogXXX function call.
 
     // Debug Tools
-    ImGuiDebugLogFlags      DebugLogFlags;
-    ImGuiTextBuffer         DebugLogBuf;
+    DebugLogFlags: DebugLogFlags,
+    DebugLogBuf: TextBuffer,
     DebugItemPickerActive: bool,              // Item picker is active (started with DebugStartItemPicker())
-    ImU8                    DebugItemPickerMouseButton;
+    DebugItemPickerMouseButton: u8,
     DebugItemPickerBreakId: ID,             // Will call IM_DEBUG_BREAK() when encountering this ID
-    ImGuiMetricsConfig      DebugMetricsConfig;
-    ImGuiStackTool          DebugStackTool;
+    DebugMetricsConfig: MetricsConfig,
+    DebugStackTool: StackTool,
 
     // Misc
     FramerateSecPerFrame: [60]f32,           // Calculate estimate of framerate for user over the last 60 frames..
@@ -724,6 +834,12 @@ pub const Storage = extern struct {
     data: ImVector,
 };
 
+pub const ImVec1 = extern struct {
+    x: f32,
+    //constexpr ImVec1()         : x(0.0f) { }
+    //constexpr ImVec1(float _x) : x(_x) { }
+};
+
 pub const NavItemData = extern struct {
     window: *Window,         // Init,Move    // Best candidate window (result->ItemWindow->RootWindowForNav == request->Window)
     id: ID,             // Init,Move    // Best candidate item ID
@@ -738,12 +854,79 @@ pub const NavItemData = extern struct {
     //void Clear()        { Window = NULL; ID = FocusScopeId = 0; InFlags = 0; DistBox = DistCenter = DistAxial = FLT_MAX; }
 };
 
+// Simple column measurement, currently used for MenuItem() only.. This is very short-sighted/throw-away code and NOT a generic helper.
+pub const MenuColumns = extern struct {
+    TotalWidth: u32,
+    NextTotalWidth: u32,
+    Spacing: u16,
+    OffsetIcon: u16,         // Always zero for now
+    OffsetLabel: u16,        // Offsets are locked in Update()
+    OffsetShortcut: u16,
+    OffsetMark: u16,
+    Widths: [4]u16,          // Width of:   Icon, Label, Shortcut, Mark  (accumulators for current frame)
+
+    //ImGuiMenuColumns() { memset(this, 0, sizeof(*this)); }
+    //void        Update(float spacing, bool window_reappearing);
+    //float       DeclColumns(float w_icon, float w_label, float w_shortcut, float w_mark);
+    //void        CalcNextTotalWidth(bool update_offsets);
+};
+
+// Transient per-window data, reset at the beginning of the frame. This used to be called ImGuiDrawContext, hence the DC variable name in ImGuiWindow.
+// (That's theory, in practice the delimitation between ImGuiWindow and ImGuiWindowTempData is quite tenuous and could be reconsidered..)
+// (This doesn't need a constructor because we zero-clear it as part of ImGuiWindow and all frame-temporary data are setup on Begin)
+pub const WindowTempData = extern struct {
+    // Layout
+    CursorPos: Vec2,              // Current emitting position, in absolute coordinates.
+    CursorPosPrevLine: Vec2,
+    CursorStartPos: Vec2,         // Initial position after Begin(), generally ~ window position + WindowPadding.
+    CursorMaxPos: Vec2,           // Used to implicitly calculate ContentSize at the beginning of next frame, for scrolling range and auto-resize. Always growing during the frame.
+    IdealMaxPos: Vec2,            // Used to implicitly calculate ContentSizeIdeal at the beginning of next frame, for auto-resize only. Always growing during the frame.
+    CurrLineSize: Vec2,
+    PrevLineSize: Vec2,
+    CurrLineTextBaseOffset: f32, // Baseline offset (0.0f by default on a new line, generally == style.FramePadding.y when a framed item has been added).
+    PrevLineTextBaseOffset: f32,
+    IsSameLine: bool,
+    Indent: ImVec1,                 // Indentation / start position from left of window (increased by TreePush/TreePop, etc.)
+    ColumnsOffset: ImVec1,          // Offset to the current column (if ColumnsCurrent > 0). FIXME: This and the above should be a stack to allow use cases like Tree->Column->Tree. Need revamp columns API.
+    GroupOffset: ImVec1,
+    CursorStartPosLossyness: Vec2,// Record the loss of precision of CursorStartPos due to really large scrolling amount. This is used by clipper to compensentate and fix the most common use case of large scroll area.
+
+    // Keyboard/Gamepad navigation
+    NavLayerCurrent: NavLayer,        // Current layer, 0..31 (we currently only use 0..1)
+    NavLayersActiveMask: i16,    // Which layers have been written to (result from previous frame)
+    NavLayersActiveMaskNext: i16,// Which layers have been written to (accumulator for current frame)
+    NavFocusScopeIdCurrent: ID, // Current focus scope ID while appending
+    NavHideHighlightOneFrame: bool,
+    NavHasScroll: bool,           // Set when scrolling can be used (ScrollMax > 0.0f)
+
+    // Miscellaneous
+    MenuBarAppending: bool,       // FIXME: Remove this
+    MenuBarOffset: Vec2,          // MenuBarOffset.x is sort of equivalent of a per-layer CursorPos.x, saved/restored as we switch to the menu bar. The only situation when MenuBarOffset.y is > 0 if when (SafeAreaPadding.y > FramePadding.y), often used on TVs.
+    menu_columns: MenuColumns,            // Simplified columns storage for menu items measurement
+    TreeDepth: c_int,              // Current tree depth.
+    TreeJumpToParentOnPopMask: u32, // Store a copy of !g.NavIdIsAlive for TreeDepth 0..31.. Could be turned into a ImU64 if necessary.
+    ChildWindows: ImVector,
+    StateStorage: *anyopaque,           // Current persistent per-window storage (store e.g. tree node open/close state)
+    CurrentColumns: *anyopaque,         // Current columns set
+    CurrentTableIdx: c_int,        // Current table index (into g.Tables)
+    LayoutType: LayoutType,
+    ParentLayoutType: LayoutType,       // Layout type of parent window at the time of Begin()
+
+    // Local parameters stacks
+    // We store the current settings outside of the vectors to increase memory locality (reduce cache misses). The vectors are rarely modified. Also it allows us to not heap allocate for short-lived windows which are not using those settings.
+    ItemWidth: f32,              // Current item width (>0.0: width in pixels, <0.0: align xx pixels to the right of window).
+    TextWrapPos: f32,            // Current text wrap pos.
+    ItemWidthStack: ImVector,         // Store item widths to restore (attention: .back() is not == ItemWidth)
+    TextWrapPosStack: ImVector,       // Store text wrap pos to restore (attention: .back() is not == TextWrapPos)
+};
+
 // Storage for one window
 pub const Window = extern struct {
-    char*                   Name;                               // Window name, owned by the window.
+    Name: [*c]u8,                               // Window name, owned by the window.
     ID: ID,                                 // == ImHashStr(Name)
-    ImGuiWindowFlags        Flags;                              // See enum ImGuiWindowFlags_
-    ImGuiViewportP*         Viewport;                           // Always set in Begin(). Inactive windows may have a NULL value here if their viewport was discarded.
+    Flags: WindowFlags,                              // See enum ImGuiWindowFlags_
+    //ImGuiViewportP*         Viewport;                           // Always set in Begin(). Inactive windows may have a NULL value here if their viewport was discarded.
+    Viewport: *anyopaque,                           // Always set in Begin(). Inactive windows may have a NULL value here if their viewport was discarded.
     Pos: Vec2,                                // Position (always rounded-up to nearest pixel)
     Size: Vec2,                               // Current size (==SizeFull or collapsed title bar size)
     SizeFull: Vec2,                           // Size when non collapsed
@@ -762,7 +945,8 @@ pub const Window = extern struct {
     ScrollTargetCenterRatio: Vec2,            // 0.0f = scroll so that target position is at top, 0.5f = scroll so that target position is centered
     ScrollTargetEdgeSnapDist: Vec2,           // 0.0f = no snapping, >0.0f snapping threshold
     ScrollbarSizes: Vec2,                     // Size taken by each scrollbars on their smaller axis. Pay attention! ScrollbarSizes.x == width of the vertical scrollbar, ScrollbarSizes.y = height of the horizontal scrollbar.
-    ScrollbarX: bool, ScrollbarY;             // Are scrollbars visible?
+    ScrollbarX: bool,
+    ScrollbarY: bool,             // Are scrollbars visible?
     Active: bool,                             // Set to true on Begin(), unless Collapsed
     WasActive: bool,
     WriteAccessed: bool,                      // Set to true when any widget access the current window
@@ -774,29 +958,32 @@ pub const Window = extern struct {
     IsFallbackWindow: bool,                   // Set on the "Debug##Default" window.
     IsExplicitChild: bool,                    // Set when passed _ChildWindow, left to false by BeginDocked()
     HasCloseButton: bool,                     // Set when the window has a close button (p_open != NULL)
-    signed char             ResizeBorderHeld;                   // Current border being held for resize (-1: none, otherwise 0-3)
+    ResizeBorderHeld: i8,                   // Current border being held for resize (-1: none, otherwise 0-3)
     BeginCount: u16,                         // Number of Begin() during the current frame (generally 0 or 1, 1+ if appending via multiple Begin/End pairs)
     BeginOrderWithinParent: u16,             // Begin() order within immediate parent window, if we are a child window. Otherwise 0.
     BeginOrderWithinContext: u16,            // Begin() order within entire imgui context. This is mostly used for debugging submission order related issues.
     FocusOrder: u16,                         // Order within WindowsFocusOrder[], altered when windows are focused.
     PopupId: ID,                            // ID in the popup stack when this window is used as a popup/menu (because we use generic Name/ID for recycling)
-    AutoFitFramesX: s8,
-    AutoFitFramesY: s8,
-    AutoFitChildAxises: s8,
+    AutoFitFramesX: i8,
+    AutoFitFramesY: i8,
+    AutoFitChildAxises: i8,
     AutoFitOnlyGrows: bool,
     AutoPosLastDirection: Dir,
-    HiddenFramesCanSkipItems: s8,           // Hide the window for N frames
-    HiddenFramesCannotSkipItems: s8,        // Hide the window for N frames while allowing items to be submitted so we can measure their size
-    HiddenFramesForRenderOnly: s8,          // Hide the window until frame N at Render() time only
-    DisableInputsFrames: s8,                // Disable window interactions for N frames
-    ImGuiCond               SetWindowPosAllowFlags : 8;         // store acceptable condition flags for SetNextWindowPos() use.
-    ImGuiCond               SetWindowSizeAllowFlags : 8;        // store acceptable condition flags for SetNextWindowSize() use.
-    ImGuiCond               SetWindowCollapsedAllowFlags : 8;   // store acceptable condition flags for SetNextWindowCollapsed() use.
+    HiddenFramesCanSkipItems: i8,           // Hide the window for N frames
+    HiddenFramesCannotSkipItems: i8,        // Hide the window for N frames while allowing items to be submitted so we can measure their size
+    HiddenFramesForRenderOnly: i8,          // Hide the window until frame N at Render() time only
+    DisableInputsFrames: i8,                // Disable window interactions for N frames
+    //ImGuiCond               SetWindowPosAllowFlags : 8;         // store acceptable condition flags for SetNextWindowPos() use.
+    //ImGuiCond               SetWindowSizeAllowFlags : 8;        // store acceptable condition flags for SetNextWindowSize() use.
+    //ImGuiCond               SetWindowCollapsedAllowFlags : 8;   // store acceptable condition flags for SetNextWindowCollapsed() use.
+    SetWindowPosAllowFlags: u8,         // store acceptable condition flags for SetNextWindowPos() use.
+    SetWindowSizeAllowFlags: u8,        // store acceptable condition flags for SetNextWindowSize() use.
+    SetWindowCollapsedAllowFlags: u8,   // store acceptable condition flags for SetNextWindowCollapsed() use.
     SetWindowPosVal: Vec2,                    // store window position when using a non-zero Pivot (position set needs to be processed when we know the window size)
     SetWindowPosPivot: Vec2,                  // store window pivot for positioning. ImVec2(0, 0) when positioning from top-left corner; ImVec2(0.5f, 0.5f) for centering; ImVec2(1, 1) for bottom right.
 
     IDStack: ImVector,                            // ID stack. ID are hashes seeded with the value at the top of the stack. (In theory this should be in the TempData structure)
-    ImGuiWindowTempData     DC;                                 // Temporary per-window data, reset at the beginning of the frame. This used to be called ImGuiDrawContext, hence the "DC" variable name.
+    DC: WindowTempData,                                 // Temporary per-window data, reset at the beginning of the frame. This used to be called ImGuiDrawContext, hence the "DC" variable name.
 
     // The best way to understand what those rectangles are is to use the 'Metrics->Tools->Show Windows Rectangles' viewer.
     // The main 'OuterRect', omitted as a field, is window->Rect().
@@ -852,16 +1039,6 @@ pub const Window = extern struct {
     //ImRect      MenuBarRect() const     { float y1 = Pos.y + TitleBarHeight(); return ImRect(Pos.x, y1, Pos.x + SizeFull.x, y1 + MenuBarHeight()); }
 };
 
-// Flags for ImDrawList instance. Those are set automatically by ImGui:: functions from ImGuiIO settings, and generally not manipulated directly.
-// It is however possible to temporarily alter flags between calls to ImDrawList:: functions.
-pub const DrawListFlags = enum(c_int) {
-    None                    = 0,
-    AntiAliasedLines        = 1 << 0,  // Enable anti-aliased lines/borders (*2 the number of triangles for 1.0f wide line or lines thin enough to be drawn using textures, otherwise *3 the number of triangles)
-    AntiAliasedLinesUseTex  = 1 << 1,  // Enable anti-aliased lines/borders using textures when possible. Require backend to render with bilinear filtering (NOT point/nearest filtering).
-    AntiAliasedFill         = 1 << 2,  // Enable anti-aliased edge around filled shapes (rounded rectangles, circles).
-    AllowVtxOffset          = 1 << 3,  // Can emit 'VtxOffset > 0' to allow large meshes. Set when 'ImGuiBackendFlags_RendererHasVtxOffset' is enabled.
-};
-
 pub const TextureId = *anyopaque;
 
 // [Internal] For use by ImDrawList
@@ -901,10 +1078,10 @@ pub const DrawList = extern struct {
     CmdBuffer: ImVector,          // Draw commands. Typically 1 command = 1 GPU draw call, unless the command is a callback.
     IdxBuffer: ImVector,          // Index buffer. Each command consume ImDrawCmd::ElemCount of those
     VtxBuffer: ImVector,          // Vertex buffer.
-    Flags: DrawListFlags;              // Flags, you may poke into these to adjust anti-aliasing settings per-primitive.
+    Flags: DrawListFlags,              // Flags, you may poke into these to adjust anti-aliasing settings per-primitive.
 
     // [Internal, used while building lists]
-    _VtxCurrentIdx: u32;     // [Internal] generally == VtxBuffer.Size unless we are past 64K vertices, in which case this gets reset to 0.
+    _VtxCurrentIdx: u32,     // [Internal] generally == VtxBuffer.Size unless we are past 64K vertices, in which case this gets reset to 0.
     _Data: *const DrawListSharedData,          // Pointer to shared draw data (you can use ImGui::GetDrawListSharedData() to get the one from current ImGui context)
     _OwnerName: [*c]const u8,         // Pointer to owner window's name for debugging
     _VtxWritePtr: *anyopaque,       // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
@@ -1169,7 +1346,7 @@ pub const Rect = extern struct {
     //void        Floor()                             { Min.x = IM_FLOOR(Min.x); Min.y = IM_FLOOR(Min.y); Max.x = IM_FLOOR(Max.x); Max.y = IM_FLOOR(Max.y); }
     //bool        IsInverted() const                  { return Min.x > Max.x || Min.y > Max.y; }
     //ImVec4      ToVec4() const                      { return ImVec4(Min.x, Min.y, Max.x, Max.y); }
-}
+};
 
 pub const IM_DRAWLIST_TEX_LINES_WIDTH_MAX = 63;
 
@@ -1906,7 +2083,6 @@ pub const IO = extern struct {
 };
 
 pub const Viewport = anyopaque;
-pub const PlatformImeData = anyopaque;
 
 // Don't use directly.
 pub const ImVector = extern struct {
