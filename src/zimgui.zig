@@ -574,7 +574,7 @@ pub const Context = extern struct {
     InputEventsTrail: ImVector,                 // Past input events processed in NewFrame(). This is to allow domain-specific application to access e.g mouse/pen trail.
     style: Style,
     font: *Font,                               // (Shortcut) == FontStack.empty() ? IO.Font : FontStack.back()
-    FontSize: f32,                           // (Shortcut) == FontBaseSize * g.CurrentWindow->FontWindowScale == window->FontSize(). Text height for current window.
+    font_size: f32,                           // (Shortcut) == FontBaseSize * g.CurrentWindow->FontWindowScale == window->FontSize(). Text height for current window.
     FontBaseSize: f32,                       // (Shortcut) == IO.FontGlobalScale * Font->Scale * Font->FontSize. Base text height.
     draw_list_shared_data: DrawListSharedData,
     Time: f64,
@@ -1005,7 +1005,7 @@ pub const Window = extern struct {
     FontWindowScale: f32,                    // User scale multiplier per-window, via SetWindowFontScale()
     SettingsOffset: c_int,                     // into SettingsWindows[] (offsets are always valid as we only grow the array from the back)
 
-    DrawList: *DrawList,                           // == &DrawListInst (for backward compatibility reason with code using internal.h we keep this a pointer)
+    draw_list: *DrawList,                           // == &DrawListInst (for backward compatibility reason with code using internal.h we keep this a pointer)
     DrawListInst: DrawList,
     ParentWindow: *Window,                       // If we are a child _or_ popup _or_ docked window, this is pointing to our parent. Otherwise NULL.
     ParentWindowInBeginStack: *Window,
@@ -1064,6 +1064,32 @@ pub const DrawListSplitter = extern struct {
     //IMGUI_API void              SetCurrentChannel(ImDrawList* draw_list, int channel_idx);
 };
 
+// Flags for ImDrawList functions
+// (Legacy: bit 0 must always correspond to ImDrawFlags_Closed to be backward compatible with old API using a bool. Bits 1..3 must be unused)
+pub const DrawFlags = enum(c_int) {
+    None                        = 0,
+    Closed                      = 1 << 0, // PathStroke(), AddPolyline(): specify that shape should be closed (Important: this is always == 1 for legacy reason)
+    RoundCornersTopLeft         = 1 << 4, // AddRect(), AddRectFilled(), PathRect(): enable rounding top-left corner only (when rounding > 0.0f, we default to all corners). Was 0x01.
+    RoundCornersTopRight        = 1 << 5, // AddRect(), AddRectFilled(), PathRect(): enable rounding top-right corner only (when rounding > 0.0f, we default to all corners). Was 0x02.
+    RoundCornersBottomLeft      = 1 << 6, // AddRect(), AddRectFilled(), PathRect(): enable rounding bottom-left corner only (when rounding > 0.0f, we default to all corners). Was 0x04.
+    RoundCornersBottomRight     = 1 << 7, // AddRect(), AddRectFilled(), PathRect(): enable rounding bottom-right corner only (when rounding > 0.0f, we default to all corners). Wax 0x08.
+    RoundCornersNone            = 1 << 8, // AddRect(), AddRectFilled(), PathRect(): disable rounding on all corners (when rounding > 0.0f). This is NOT zero, NOT an implicit flag!
+    RoundCornersTop             = 1 << 4 | 1 << 5,
+    RoundCornersBottom          = 1 << 6 | 1 << 7,
+    RoundCornersLeft            = 1 << 6 | 1 << 4,
+    RoundCornersRight           = 1 << 7 | 1 << 5,
+    RoundCornersAll             = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7,
+    RoundCornersDefault_        = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7, // Default to ALL corners if none of the _RoundCornersXX flags are specified.
+    RoundCornersMask_           = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7 | 1 << 8,
+    //RoundCornersTop             = RoundCornersTopLeft | RoundCornersTopRight,
+    //RoundCornersBottom          = RoundCornersBottomLeft | RoundCornersBottomRight,
+    //RoundCornersLeft            = RoundCornersBottomLeft | RoundCornersTopLeft,
+    //RoundCornersRight           = RoundCornersBottomRight | RoundCornersTopRight,
+    //RoundCornersAll             = RoundCornersTopLeft | RoundCornersTopRight | RoundCornersBottomLeft | RoundCornersBottomRight,
+    //RoundCornersDefault_        = RoundCornersAll, // Default to ALL corners if none of the _RoundCornersXX flags are specified.
+    //RoundCornersMask_           = RoundCornersAll | RoundCornersNone,
+};
+
 // Draw command list
 // This is the low-level list of polygons that ImGui:: functions are filling. At the end of the frame,
 // all command lists are passed to your ImGuiIO::RenderDrawListFn function for rendering.
@@ -1074,6 +1100,12 @@ pub const DrawListSplitter = extern struct {
 // You are totally free to apply whatever transformation matrix to want to the data (depending on the use of the transformation you may want to apply it to ClipRect as well!)
 // Important: Primitives are always added to the list and not culled (culling is done at higher-level by ImGui:: functions), if you use this API a lot consider coarse culling your drawn objects.
 pub const DrawList = extern struct {
+    //IMGUI_API void  AddRectFilled(const ImVec2& p_min, const ImVec2& p_max, ImU32 col, float rounding = 0.0f, ImDrawFlags flags = 0);                     // a: upper-left, b: lower-right (== upper-left + size)
+    pub fn addRectFilled(draw_list: *DrawList, p_min: Vec2, p_max: Vec2, col: u32, rounding: f32, flags: DrawFlags) void {
+        ImGui_DrawList_AddRectFilled(draw_list, p_min, p_max, col, rounding, flags);
+    }
+    extern fn ImGui_DrawList_AddRectFilled(draw_list: *anyopaque, p_min: Vec2, p_max: Vec2, col: u32, rounding: f32, flags: DrawFlags) void;
+
     // This is what you have to render
     CmdBuffer: ImVector,          // Draw commands. Typically 1 command = 1 GPU draw call, unless the command is a callback.
     IdxBuffer: ImVector,          // Index buffer. Each command consume ImDrawCmd::ElemCount of those
@@ -1300,9 +1332,11 @@ pub const Vec2 = extern struct {
     x: f32,
     y: f32,
 
-    pub fn add(a: Vec2, b: Vec2) void {
-        a.x += b.x;
-        a.y += b.y;
+    pub fn add(a: Vec2, b: Vec2) Vec2 {
+        return Vec2{
+            .x = a.x + b.x,
+            .y = a.y + b.y,
+        };
     }
 };
 
@@ -1478,9 +1512,11 @@ pub const FontConfig = extern struct {
     DstFont: *Font,
 
     pub fn init() FontConfig {
-        return ImGui_FontConfig_FontConfig();
+        var font_config: FontConfig = undefined;
+        ImGui_FontConfig_FontConfig(&font_config);
+        return font_config;
     }
-    extern fn ImGui_FontConfig_FontConfig() FontConfig;
+    extern fn ImGui_FontConfig_FontConfig(font_config: *anyopaque) void;
 };
 
 pub const FontGlyph = extern struct {
@@ -2064,16 +2100,16 @@ pub const IO = extern struct {
     InputQueueCharacters: ImVector,         // Queue of _characters_ input (obtained by platform backend). Fill using AddInputCharacter() helper.
 
     pub fn init() IO {
-        var io = ImGui_ImGuiIO();
-        var our_io = @ptrCast(*IO, &io).*;
-        return our_io;
+        var io: IO = undefined;
+        ImGui_ImGuiIO(&io);
+        //var our_io = @ptrCast(*IO, &io).*;
+        return io;
     }
+    pub extern fn ImGui_ImGuiIO(io: *IO) void;
 
     pub fn get() *IO {
         return ImGui_GetIO();
     }
-
-    pub extern fn ImGui_ImGuiIO() IO;
     pub extern fn ImGui_GetIO() *IO;
 
     // cannot declare it inline when using extern / 2022-07-26

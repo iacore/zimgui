@@ -1,4 +1,5 @@
 #include "imgui.h"
+#include <new> // for placement new
 
 extern "C" void* ImGui_CreateContext(void* shared_font_atlas)
 {
@@ -99,9 +100,10 @@ extern "C" const char* ImGui_GetVersion()
 	return ImGui::GetVersion();
 }
 
-extern "C" ImGuiIO ImGui_ImGuiIO()
+extern "C" void ImGui_ImGuiIO(void* io)
 {
-	return ImGuiIO();
+	auto* cio = reinterpret_cast<ImGuiIO*>(io);
+    new (cio) ImGuiIO;
 }
 
 extern "C" ImGuiStyle* ImGui_GetStyle()
@@ -161,9 +163,15 @@ extern "C" void ImGui_PopStyleColor(int count)
 	ImGui::PopStyleColor(count);
 }
 
-extern "C" ImFontConfig ImGui_FontConfig_FontConfig()
+extern "C" void ImGui_FontConfig_FontConfig(void* font_config)
 {
-	return ImFontConfig();
+	auto* cfont_config = reinterpret_cast<ImFontConfig*>(font_config);
+	new (cfont_config) ImFontConfig;
+}
+
+extern "C" void ImGui_DrawList_AddRectFilled(void* draw_list, ImVec2 p_min, ImVec2 p_max, ImU32 col, float rounding, int flags) {
+	auto* draw_list = reinterpret_cast<ImGuiDrawList*>(draw_list);
+	draw_list->AddRectFilled(p_min, p_max, col, rounding, flags);
 }
 
 //
