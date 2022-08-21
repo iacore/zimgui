@@ -3,7 +3,7 @@ const std = @import("std");
 
 /// Build and link zig imgui bindings.
 ///
-/// Remeber to also call 
+/// Remeber to also call
 /// `exe.addPackagePath("zimgui", "deps/zimgui/src/zimgui.zig");`
 ///
 pub fn link(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeObjStep {
@@ -14,9 +14,9 @@ pub fn link(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeObjSte
 
 /// Use OpenGL3 as rendering backend, and Glfw for windowing.
 ///
-/// Remeber to also call 
+/// Remeber to also call
 /// `exe.addPackagePath("zimgui_backend", "deps/zimgui/src/backend_glfw_opengl3.zig");`
-/// 
+///
 pub fn addBackendGlfwOpenGl3(b: *Builder, exe: *std.build.LibExeObjStep) void {
     exe.addCSourceFiles(&[_][]const u8{
         relativePath(b, "src/backend_glfw_opengl3.cpp"),
@@ -42,7 +42,7 @@ fn buildLibrary(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeOb
 
         relativePath(b, "deps/imgui/imgui.cpp"),
         //relativePath(b, "deps/imgui/imgui_draw.cpp"),
-        relativePath(b, "src/zimgui_draw.cpp"), // TODO option
+        relativePath(b, "src/zimgui_draw.cpp"), // TODO this should be an option
         relativePath(b, "deps/imgui/imgui_tables.cpp"),
         relativePath(b, "deps/imgui/imgui_widgets.cpp"),
         relativePath(b, "deps/imgui/imgui_demo.cpp"),

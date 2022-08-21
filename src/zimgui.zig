@@ -631,7 +631,7 @@ pub fn setImguiTheme() void {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Helper
+// Helper - make it seamless to format text
 //
 
 var fmt_buffer: std.ArrayList(u8) = std.ArrayList(u8).init(std.heap.c_allocator);
