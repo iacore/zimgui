@@ -1,177 +1,271 @@
 #include "imgui.h"
-#include <new> // for placement new
+#include "imgui_internal.h"
 
-extern "C" void* ImGui_CreateContext(void* shared_font_atlas)
+#define ZIMGUI_API extern "C"
+
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API ImGuiContext* zimgui_createContext(ImFontAtlas* shared_font_atlas)
 {
-	return ImGui::CreateContext(reinterpret_cast<ImFontAtlas*>(shared_font_atlas));
+  return ImGui::CreateContext(shared_font_atlas);
 }
 
-extern "C" void ImGui_DestoryContext(void* context)
+ZIMGUI_API void zimgui_destoryContext(ImGuiContext* context)
 {
-	ImGui::DestroyContext(reinterpret_cast<ImGuiContext*>(context));
+  ImGui::DestroyContext(context);
 }
 
-extern "C" void* ImGui_GetCurrentContext()
+ZIMGUI_API ImGuiContext* zimgui_getCurrentContext()
 {
-	return ImGui::GetCurrentContext();
+  return ImGui::GetCurrentContext();
 }
 
-extern "C" void ImGui_SetCurrentContext(void* context)
+ZIMGUI_API ImDrawData* zimgui_getDrawData()
 {
-	ImGui::SetCurrentContext(reinterpret_cast<ImGuiContext*>(context));
+  return ImGui::GetDrawData();
 }
 
-extern "C" bool ImGui_Begin(const char* name, bool* open = NULL, ImGuiWindowFlags flags = 0)
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_newFrame()
 {
-	return ImGui::Begin(name, open, flags);
+  ImGui::NewFrame();
 }
 
-extern "C" void ImGui_End()
+ZIMGUI_API void zimgui_endFrame()
 {
-	ImGui::End();
+  ImGui::EndFrame();
 }
 
-extern "C" void ImGui_Text(const char* text, size_t len)
+ZIMGUI_API void zimgui_render()
 {
-	ImGui::TextUnformatted(text, text + len);
+  ImGui::Render();
 }
 
-extern "C" void ImGui_TextColored(const ImVec4* color, const char* text)
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_showDemoWindow(bool* open)
 {
-	ImGui::TextColoredV(*color, text, {});
+  ImGui::ShowDemoWindow(open);
 }
 
-extern "C" ImVec2 ImGui_CalcTextSize(const char* text, size_t text_len, float wrap_width)
+ZIMGUI_API void zimgui_showMetricsWindow(bool* open)
 {
-	return ImGui::CalcTextSize(text, text + text_len, false, wrap_width);
+  ImGui::ShowMetricsWindow(open);
 }
 
-extern "C" bool ImGui_Button(const char* text, const ImVec2 size)
+ZIMGUI_API void zimgui_showStackToolWindow(bool* open)
 {
-	return ImGui::Button(text, size);
+  ImGui::ShowStackToolWindow(open);
 }
 
-extern "C" bool ImGui_SliderInt(const char* label, int* v, int v_min, int v_max, const char* fmt, ImGuiSliderFlags flags)
+ZIMGUI_API const char* zimgui_getVersion()
 {
-	return ImGui::SliderInt(label, v, v_min, v_max, fmt, flags);
+  return ImGui::GetVersion();
 }
 
-extern "C" bool ImGui_InputText(const char* label, char* buf, size_t buflen, ImGuiInputTextFlags flags)
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_begin(const char* name, bool* open, ImGuiWindowFlags_ flags)
 {
-	return ImGui::InputText(label, buf, buflen, flags);
+  ImGui::Begin(name, open, flags);
 }
 
-extern "C" void ImGui_Seprator()
+ZIMGUI_API void zimgui_end()
 {
-	ImGui::Separator();
+  ImGui::End();
 }
 
-extern "C" void ImGui_SameLine(float offset_from_start, float spacing)
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_pushStyleColor(ImGuiCol_ style_col, unsigned int color)
 {
-	ImGui::SameLine(offset_from_start, spacing);
+  ImGui::PushStyleColor(style_col, color);
 }
 
-extern "C" void ImGui_NewFrame()
+ZIMGUI_API void zimgui_popStyleColor(int count)
 {
-	ImGui::NewFrame();
+  ImGui::PopStyleColor(count);
 }
 
-extern "C" void ImGui_EndFrame()
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_separator()
 {
-	ImGui::EndFrame();
+  ImGui::Separator();
 }
-extern "C" void ImGui_Render()
+
+ZIMGUI_API void zimgui_sameLine(float offset_from_start_x, float spacing)
 {
-	ImGui::Render();
+  ImGui::SameLine(offset_from_start_x, spacing);
 }
 
-extern "C" void ImGui_ShowDemoWindow(bool* open)
+ZIMGUI_API void zimgui_textUnformatted(const char* text, size_t len)
 {
-	ImGui::ShowDemoWindow(open);
+  ImGui::TextUnformatted(text, text + len);
 }
 
-extern "C" void* ImGui_GetDrawData()
+ZIMGUI_API void zimgui_textColored(float r, float g, float b, float a, const char* text)
 {
-	return ImGui::GetDrawData();
+  ImGui::TextColored({r, g, b, a}, "%s", text);
 }
 
-extern "C" const char* ImGui_GetVersion()
+ZIMGUI_API bool zimgui_button(const char* text, float x, float y)
 {
-	return ImGui::GetVersion();
+  return ImGui::Button(text, {x, y});
 }
 
-extern "C" void ImGui_ImGuiIO(void* io)
+ZIMGUI_API bool zimgui_sliderInt(const char* label, int* v, int min, int max)
 {
-	auto* cio = reinterpret_cast<ImGuiIO*>(io);
-    new (cio) ImGuiIO;
+  return ImGui::SliderInt(label, v, min, max);
 }
 
-extern "C" ImGuiStyle* ImGui_GetStyle()
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_calcTextSize(const char* text, size_t len, float wrap_width, float* x, float* y)
 {
-	return &ImGui::GetStyle();
+  auto vec = ImGui::CalcTextSize(text, text + len, false, wrap_width);
+  *x = vec.x;
+  *y = vec.y;
 }
 
-extern "C" ImGuiIO* ImGui_GetIO()
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API ImGuiIO* zimgui_Context_getIo(ImGuiContext* context)
 {
-	return &ImGui::GetIO();
+  return &context->IO;
 }
 
-extern "C" ImFont* ImGui_FontAtlas_AddFontFromFileTTF(void* font_atlas, const char* filename, float size_pixels, const ImFontConfig* font_cfg, const ImWchar* glyph_ranges)
+ZIMGUI_API ImGuiStyle* zimgui_Context_getStyle(ImGuiContext* context)
 {
-	auto* font_atlas_typed = reinterpret_cast<ImFontAtlas*>(font_atlas);
-	return font_atlas_typed->AddFontFromFileTTF(filename, size_pixels, font_cfg, glyph_ranges);
+  return &context->Style;
 }
 
-extern "C" void ImGui_FontAtlas_ClearFonts(void* font_atlas)
+ZIMGUI_API ImGuiWindow* zimgui_Context_getCurrentWindow(ImGuiContext* context)
 {
-	auto* font_atlas_typed = reinterpret_cast<ImFontAtlas*>(font_atlas);
-	font_atlas_typed->ClearFonts();
+  return context->CurrentWindow;
 }
 
-extern "C" bool ImGui_FontAtlas_Build(void* font_atlas)
+ZIMGUI_API ImFont* zimgui_Context_getFont(ImGuiContext* context)
 {
-	auto* typed_font_atlas = reinterpret_cast<ImFontAtlas*>(font_atlas);
-	return typed_font_atlas->Build();
+  return context->Font;
 }
 
-extern "C" const ImWchar* ImGui_FontAtlas_GetGlyphRangesDefault(void* font_atlas)
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API ImFontAtlas* zimgui_Io_getFontAtlas(ImGuiIO* io)
 {
-	auto* typed_font_atlas = reinterpret_cast<ImFontAtlas*>(font_atlas);
-	return typed_font_atlas->GetGlyphRangesDefault();
+  return io->Fonts;
 }
 
-extern "C" void ImGui_FontAtlas_GetTexDataAsRGBA32(void* font_atlas, unsigned char** out_pixels, int* out_width, int* out_height, int* out_bytes_per_pixel = NULL) {
-	auto* typed_font_atlas = reinterpret_cast<ImFontAtlas*>(font_atlas);
-	typed_font_atlas->GetTexDataAsRGBA32(out_pixels, out_width, out_height, out_bytes_per_pixel);
-}
-
-extern "C" void ImGui_PushFont(void* font) {
-	ImGui::PushFont(reinterpret_cast<ImFont*>(font));
-}
-
-extern "C" void ImGui_PopFont() {
-	ImGui::PopFont();
-}
-
-extern "C" void ImGui_PushStyleColor(ImGuiCol slot, ImVec4 color)
+ZIMGUI_API void zimgui_Io_setDisplaySize(ImGuiIO* io, float width, float height)
 {
-	ImGui::PushStyleColor(slot, color);
+  io->DisplaySize.x = width;
+  io->DisplaySize.y = height;
 }
 
-extern "C" void ImGui_PopStyleColor(int count)
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_Style_setColor(ImGuiStyle* style, ImGuiCol_ style_col, float x, float y, float z, float w)
 {
-	ImGui::PopStyleColor(count);
+  auto& color = style->Colors[style_col];
+  color.x = x;
+  color.y = y;
+  color.z = z;
+  color.w = w;
 }
 
-extern "C" void ImGui_FontConfig_FontConfig(void* font_config)
+ZIMGUI_API void zimgui_Style_getColor(ImGuiStyle* style, ImGuiCol_ style_col, float* x, float* y, float* z, float* w)
 {
-	auto* cfont_config = reinterpret_cast<ImFontConfig*>(font_config);
-	new (cfont_config) ImFontConfig;
+  auto& color = style->Colors[style_col];
+  *x = color.x;
+  *y = color.y;
+  *z = color.z;
+  *w = color.w;
 }
 
-extern "C" void ImGui_DrawList_AddRectFilled(void* draw_list, ImVec2 p_min, ImVec2 p_max, ImU32 col, float rounding, int flags) {
-	auto* draw_list = reinterpret_cast<ImGuiDrawList*>(draw_list);
-	draw_list->AddRectFilled(p_min, p_max, col, rounding, flags);
+ZIMGUI_API void zimgui_Style_getFramePadding(ImGuiStyle* style, float* x, float* y)
+{
+  *x = style->FramePadding.x;
+  *y = style->FramePadding.y;
 }
+
+ZIMGUI_API void zimgui_Style_getItemSpacing(ImGuiStyle* style, float* x, float* y)
+{
+  *x = style->ItemSpacing.x;
+  *y = style->ItemSpacing.y;
+}
+
+ZIMGUI_API void zimgui_Style_getItemInnerSpacing(ImGuiStyle* style, float* x, float* y)
+{
+  *x = style->ItemInnerSpacing.x;
+  *y = style->ItemInnerSpacing.y;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API ImDrawList* zimgui_Window_getDrawList(ImGuiWindow* window)
+{
+  return window->DrawList;
+}
+
+ZIMGUI_API void zimgui_Window_getPos(ImGuiWindow* window, float* x, float* y)
+{
+  *x = window->Pos.x;
+  *y = window->Pos.y;
+}
+
+ZIMGUI_API void zimgui_Window_getSize(ImGuiWindow* window, float* x, float* y)
+{
+  *x = window->Size.x;
+  *y = window->Size.y;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_DrawList_addLine(ImDrawList* draw_list, float p1_x, float p1_y, float p2_x, float p2_y, unsigned int color, float thickness)
+{
+  draw_list->AddLine({p1_x, p1_y}, {p2_x, p2_y}, color, thickness);
+}
+
+ZIMGUI_API void zimgui_DrawList_addRectFilled(ImDrawList* draw_list, float min_x, float min_y, float max_x, float max_y, unsigned int color, float rounding, ImDrawFlags_ flags)
+{
+  draw_list->AddRectFilled({min_x, min_y}, {max_x, max_y}, color, rounding, flags);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API void zimgui_FontAtlas_getTexDataAsRGBA32(ImFontAtlas* font_atlas, unsigned char** text_pixels, int* text_w, int* text_h, int* bytes_per_pixel)
+{
+  return font_atlas->GetTexDataAsRGBA32(text_pixels, text_w, text_h, bytes_per_pixel);
+}
+
+ZIMGUI_API void zimgui_FontAtlas_addFontFromFileTTF(ImFontAtlas* font_atlas, const char* filename, float size_pixels)
+{
+  font_atlas->AddFontFromFileTTF(filename, size_pixels);
+}
+
+ZIMGUI_API bool zimgui_FontAtlas_build(ImFontAtlas* font_atlas)
+{
+  return font_atlas->Build();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API float zimgui_Font_getFallbackAdvanceX(ImFont* font)
+{
+  return font->FallbackAdvanceX;
+}
+
+ZIMGUI_API float zimgui_Font_getFontSize(ImFont* font)
+{
+  return font->FontSize;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+//ZIMGUI_API void zimgui_Ext_addText(ImGuiContext* context, float font_size, float pos_x, float pos_y, const char* text, size_t textlen, float wrap_width, const float* clip_rect_min_x, const float* clip_rect_min_y, const float* clip_rect_max_x, const float* clip_rect_max_y, const unsigned int* colorlen, size_t colorlen_len);
+
+//ZIMGUI_API void zimgui_Ext_calcBbForCharInText(ImGuiContext* context, float font_size, float x, float y, const char* text, size_t len, float wrap_width, size_t char_index, float* min_x, float* min_y, float* max_x, float* max_y);
 
 //

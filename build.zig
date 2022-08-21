@@ -41,7 +41,8 @@ fn buildLibrary(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeOb
         relativePath(b, "src/zimgui.cpp"),
 
         relativePath(b, "deps/imgui/imgui.cpp"),
-        relativePath(b, "deps/imgui/imgui_draw.cpp"),
+        //relativePath(b, "deps/imgui/imgui_draw.cpp"),
+        relativePath(b, "src/zimgui_draw.cpp"), // TODO option
         relativePath(b, "deps/imgui/imgui_tables.cpp"),
         relativePath(b, "deps/imgui/imgui_widgets.cpp"),
         relativePath(b, "deps/imgui/imgui_demo.cpp"),
