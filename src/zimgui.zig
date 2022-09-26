@@ -364,8 +364,8 @@ pub const Vec2 = struct {
         this.y += other.y;
     }
 
-    // Immutable version of `add`, creates a new copy instead of reusing first arg.
-    pub fn newAdd(a: Vec2, b: Vec2) Vec2 {
+    /// Add two Vec2's together and return the sum.
+    pub fn sum(a: Vec2, b: Vec2) Vec2 {
         return Vec2{
             .x = a.x + b.x,
             .y = a.y + b.y,
@@ -637,13 +637,14 @@ pub fn setImguiTheme() void {
 var fmt_buffer: std.ArrayList(u8) = std.ArrayList(u8).init(std.heap.c_allocator);
 
 /// @return Memory only valid until next call to format. Not thread safe.
-fn format(comptime fmt: []const u8, args: anytype) []const u8 {
+pub fn format(comptime fmt: []const u8, args: anytype) []const u8 {
     const len = std.fmt.count(fmt, args);
     if (len > fmt_buffer.items.len) fmt_buffer.resize(len + 64) catch unreachable;
     return std.fmt.bufPrint(fmt_buffer.items, fmt, args) catch unreachable;
 }
 
-fn formatZ(comptime fmt: []const u8, args: anytype) [:0]const u8 {
+/// @return Memory only valid until next call to format. Not thread safe.
+pub fn formatZ(comptime fmt: []const u8, args: anytype) [:0]const u8 {
     const len = std.fmt.count(fmt, args);
     if (len > fmt_buffer.items.len) fmt_buffer.resize(len + 64) catch unreachable;
     return std.fmt.bufPrintZ(fmt_buffer.items, fmt, args) catch unreachable;
