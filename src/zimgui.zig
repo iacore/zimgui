@@ -178,6 +178,16 @@ pub fn button(comptime fmt: []const u8, args: anytype, size: ?Vec2) bool {
 }
 extern fn zimgui_button([*:0]const u8, f32, f32) bool;
 
+pub fn image() void {
+    
+}
+extern fn zimgui_image() void;
+
+pub fn imageButton() bool {
+    
+}
+extern fn zimgui_imageButton() bool;
+
 pub fn sliderInt(comptime fmt: []const u8, args: anytype, v: *i32, min: i32, max: i32) bool {
     var res = formatZ(fmt, args);
     return zimgui_sliderInt(res.ptr, v, min, max);
