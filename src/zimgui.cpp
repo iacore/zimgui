@@ -76,6 +76,16 @@ ZIMGUI_API void zimgui_end()
   ImGui::End();
 }
 
+ZIMGUI_API void zimgui_setNextWindowPos(float posx, float posy, unsigned int cond, float pivotx, float pivoty)
+{
+  ImGui::SetNextWindowPos({posx, posy}, cond, {pivotx, pivoty});
+}
+
+ZIMGUI_API void zimgui_setNextWindowSize(float sizex, float sizey, unsigned int cond)
+{
+  ImGui::SetNextWindowSize({sizex, sizey}, cond);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 ZIMGUI_API void zimgui_pushStyleColor(ImGuiCol_ style_col, unsigned int color)

@@ -111,6 +111,23 @@ pub fn end() void {
 }
 extern fn zimgui_end() void;
 
+// set next window position. call before Begin(). use pivot=(0.5f,0.5f) to center on given point, etc.
+pub fn setNextWindowPos(pos: Vec2, cond: GuiCond, pivot: ?Vec2) void {
+    if (pivot) |p| {
+        zimgui_setNextWindowPos(pos.x, pos.y, @enumToInt(cond), p.x, p.y);
+    } else {
+        zimgui_setNextWindowPos(pos.x, pos.y, @enumToInt(cond), 0, 0);
+    }
+}
+extern fn zimgui_setNextWindowPos(f32, f32, u32, f32, f32) void;
+
+pub fn setNextWindowSize(size: Vec2, cond: GuiCond) void {
+    zimgui_setNextWindowSize(size.x, size.y, @enumToInt(cond));
+}
+extern fn zimgui_setNextWindowSize(f32, f32, u32) void;
+
+// set next window size. set axis to 0.0f to force an auto-fit on this axis. call before Begin()
+
 ///////////////////////////////////////////////////////////////////////////////
 
 // modify a style color. always use this if you modify the style after NewFrame().
@@ -439,6 +456,14 @@ pub const WindowFlags = packed struct {
     comptime {
         assert(@sizeOf(@This()) == @sizeOf(u32) and @bitSizeOf(@This()) == @bitSizeOf(u32));
     }
+};
+
+pub const GuiCond = enum(u32) {
+        None          = 0,        // No condition (always set the variable), same as _Always
+        Always        = 1 << 0,   // No condition (always set the variable)
+        Once          = 1 << 1,   // Set the variable once per runtime session (only the first call will succeed)
+        FirstUseEver  = 1 << 2,   // Set the variable if the object/window has no persistently saved data (no entry in .ini file)
+        Appearing     = 1 << 3,   // Set the variable if the object/window is appearing after being hidden/inactive (or the first time)
 };
 
 // Enumeration for PushStyleColor() / PopStyleColor()
