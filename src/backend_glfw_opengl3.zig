@@ -115,18 +115,34 @@ pub const OpenGl3 = struct {
         }
     }
 
+    /// Remeber to call `enable` to enable debug output.
+    ///
+    /// Example usage:
+    ///
+    /// fn onOpenGl3DebugMessage(source: gl.Enum.ValueType, type_: gl.Enum.ValueType, id: u32, severity: gl.Enum.ValueType, length: i32, message: [*c]const u8, user_param: *const anyopaque) void {
+    ///     _ = length;
+    ///     _ = user_param;
+    ///     var msg = message[0..@intCast(usize, length)];
+    ///     std.debug.print("OpenGL3: {{id: {}, severity: {}, message: {s}, source: {}, type: {}}}\n", .{id, severity, msg, source, type_});
+    /// }
+    ///
+    ///
+    /// var not_user_param: usize = undefined;
+    /// gl.debugMessageCallback(onOpenGl3DebugMessage, @ptrCast(*const anyopaque, &not_user_param));
+    ///
     pub fn debugMessageCallback(callback: fn (source: Enum.ValueType, type_: Enum.ValueType, id: u32, severity: Enum.ValueType, length: i32, message: [*c]const u8, user_param: *const anyopaque) void, user_param: *const anyopaque) void {
         zimgui_glDebugMessageCallback(callback, user_param);
     }
     extern fn zimgui_glDebugMessageCallback(callback: *const anyopaque, user_param: *const anyopaque) void;
 
+    /// Use to turn on features, such as debug output:
+    ///
+    /// gl.enable(.{.value = gl.Enum.DEBUG_OUTPUT});
+    ///
     pub fn enable(cap: Enum) void {
         zimgui_glEnable(cap.value);
     }
     extern fn zimgui_glEnable(cap: Enum.ValueType) void;
-    //typedef void (APIENTRYP PFNGLDEBUGMESSAGECALLBACKPROC)(GLDEBUGPROC callback, const void *userParam);
-    //GLAPI PFNGLDEBUGMESSAGECALLBACKPROC glad_glDebugMessageCallback;
-    //#define glDebugMessageCallback glad_glDebugMessageCallback
 
     /// Pass glad the OpenGL loader function `getProcAddress`.
     /// Example using glfw:
