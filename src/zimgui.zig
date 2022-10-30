@@ -1,6 +1,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
+pub const zimage = @import("zimage.zig");
+
 ///////////////////////////////////////////////////////////////////////////////
 // functions
 //
@@ -178,15 +180,17 @@ pub fn button(comptime fmt: []const u8, args: anytype, size: ?Vec2) bool {
 }
 extern fn zimgui_button([*:0]const u8, f32, f32) bool;
 
-pub fn image() void {
-    
+pub fn image(textureId: u32, size: Vec2, uv0: ?Vec2, uv1: ?Vec2) void {
+    var uv0_: Vec2 = if (uv0) |uv0u| uv0u else Vec2{.x=0, .y=0};
+    var uv1_: Vec2 = if (uv1) |uv1u| uv1u else Vec2{.x=1, .y=1};
+    zimgui_image(textureId, size.x, size.y, uv0_.x, uv0_.y, uv1_.x, uv1_.y);
 }
-extern fn zimgui_image() void;
+extern fn zimgui_image(u32, f32, f32, f32, f32, f32, f32) void;
 
-pub fn imageButton() bool {
-    
+pub fn imageButton(textureId: u32, size: Vec2) bool {
+    return zimgui_imageButton(textureId, size.x, size.y);
 }
-extern fn zimgui_imageButton() bool;
+extern fn zimgui_imageButton(u32, f32, f32) bool;
 
 pub fn sliderInt(comptime fmt: []const u8, args: anytype, v: *i32, min: i32, max: i32) bool {
     var res = formatZ(fmt, args);
