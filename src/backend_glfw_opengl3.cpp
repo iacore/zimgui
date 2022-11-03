@@ -61,14 +61,14 @@ ZIMGUI_API void zimgui_glDeleteTextures(size_t count, const uint* textures)
   glDeleteTextures(count, textures);
 }
 
-ZIMGUI_API void zimgui_glTexImage2D(uint target, int level, uint internal_format, int width, int height, int border, uint format, uint type_, const void* pixels)
+ZIMGUI_API void zimgui_glTextureParameteri(uint id, int pname, int param)
 {
-  glTexImage2D(target, level, internal_format, width, height, border, format, type_, pixels);
+  glTextureParameteri(id, pname, param);
 }
 
-ZIMGUI_API void zimgui_glTexParameteri(uint target, uint pname, uint param)
+ZIMGUI_API void zimgui_glTextureParameterfv(uint id, int pname, const float* params)
 {
-  glTexParameteri(target, pname, param);
+  glTextureParameterfv(id, pname, params);
 }
 
 ZIMGUI_API void zimgui_glTextureStorage2D(uint texture, int levels, int format, int width, int height)

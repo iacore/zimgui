@@ -51,8 +51,8 @@ pub const OpenGl3 = struct {
     extern fn zimgui_glGenTextures(usize, [*]u32) void;
 
     /// @param target You probably want Enum.TEXTURE_2D
-    pub fn bindTexture(target: Enum, texture: TextureId) void {
-        zimgui_glBindTexture(target.value, texture);
+    pub fn bindTexture(target: Enum.ValueType, texture: TextureId) void {
+        zimgui_glBindTexture(target, texture);
     }
     extern fn zimgui_glBindTexture(Enum.ValueType, TextureId) void;
 
@@ -61,26 +61,23 @@ pub const OpenGl3 = struct {
     }
     extern fn zimgui_glDeleteTextures(usize, [*]const u32) void;
 
-    /// Example
-    ///   glTexImage2D(Enum.TEXTURE_2D, 0, Enum.RGBA, width, height, 0, Enum.RGBA, Enum.UNSIGNED_BYTE, data)
-    pub fn texImage2D(target: Enum, level: i32, internal_format: Enum, width: i32, height: i32, border: i32, format: Enum, type_: Enum, pixels: []const u8) void {
-        zimgui_glTexImage2D(target.value, level, internal_format.value, width, height, border, format.value, type_.value, @ptrCast(*const anyopaque, pixels.ptr));
+    pub fn textureParameteri(id: TextureId, pname: Enum.ValueType, param: Enum.ValueType) void {
+        zimgui_glTextureParameteri(id, pname, param);
     }
-    extern fn zimgui_glTexImage2D(Enum.ValueType, i32, Enum.ValueType, i32, i32, i32, Enum.ValueType, Enum.ValueType, *const anyopaque) void;
+    extern fn zimgui_glTextureParameteri(TextureId, Enum.ValueType, Enum.ValueType) void;
 
-    /// Ex glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    pub fn texParameteri(target: Enum, pname: Enum, param: Enum) void {
-        zimgui_glTexParameteri(target.value, pname.value, param.value);
+    pub fn textureParameterfv(id: TextureId, pname: Enum.ValueType, params: [*]const f32) void {
+        zimgui_glTextureParameterfv(id, pname, params);
     }
-    extern fn zimgui_glTexParameteri(Enum.ValueType, Enum.ValueType, Enum.ValueType) void;
+    extern fn zimgui_glTextureParameterfv(TextureId, Enum.ValueType, [*]const f32) void;
 
-    pub fn textureStorage2D(texture: TextureId, levels: i32, format: Enum, width: i32, height: i32) void {
-        zimgui_glTextureStorage2D(texture, levels, format.value, width, height);
+    pub fn textureStorage2D(texture: TextureId, levels: i32, format: Enum.ValueType, width: i32, height: i32) void {
+        zimgui_glTextureStorage2D(texture, levels, format, width, height);
     }
     extern fn zimgui_glTextureStorage2D(TextureId, i32, Enum.ValueType, i32, i32) void;
 
-    pub fn textureSubImage2D(texture: TextureId, level: i32, xoffset: i32, yoffset: i32, width: i32, height: i32, format: Enum, type_: Enum, pixels: *const anyopaque) void {
-        zimgui_glTextureSubImage2D(texture, level, xoffset, yoffset, width, height, format.value, type_.value, pixels);
+    pub fn textureSubImage2D(texture: TextureId, level: i32, xoffset: i32, yoffset: i32, width: i32, height: i32, format: Enum.ValueType, type_: Enum.ValueType, pixels: *const anyopaque) void {
+        zimgui_glTextureSubImage2D(texture, level, xoffset, yoffset, width, height, format, type_, pixels);
     }
     extern fn zimgui_glTextureSubImage2D(TextureId, i32, i32, i32, i32, i32, Enum.ValueType, Enum.ValueType, *const anyopaque) void;
 
