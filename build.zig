@@ -25,8 +25,8 @@ pub fn addBackendGlfwOpenGl3(b: *Builder, exe: *std.build.LibExeObjStep) void {
         relativePath(b, "deps/glad/src/glad.c"),
         }, &[_][]const u8{});
 
-    exe.addIncludeDir(relativePath(b, "deps/imgui"));
-    exe.addIncludeDir(relativePath(b, "deps/glad/include"));
+    exe.addIncludePath(relativePath(b, "deps/imgui"));
+    exe.addIncludePath(relativePath(b, "deps/glad/include"));
     exe.linkLibCpp();
 }
 

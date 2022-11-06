@@ -127,7 +127,7 @@ pub const OpenGl3 = struct {
     /// var not_user_param: usize = undefined;
     /// gl.debugMessageCallback(onOpenGl3DebugMessage, @ptrCast(*const anyopaque, &not_user_param));
     ///
-    pub fn debugMessageCallback(callback: fn (source: Enum.ValueType, type_: Enum.ValueType, id: u32, severity: Enum.ValueType, length: i32, message: [*c]const u8, user_param: *const anyopaque) void, user_param: *const anyopaque) void {
+    pub fn debugMessageCallback(callback: *const fn (source: Enum.ValueType, type_: Enum.ValueType, id: u32, severity: Enum.ValueType, length: i32, message: [*c]const u8, user_param: *const anyopaque) void, user_param: *const anyopaque) void {
         zimgui_glDebugMessageCallback(callback, user_param);
     }
     extern fn zimgui_glDebugMessageCallback(callback: *const anyopaque, user_param: *const anyopaque) void;
