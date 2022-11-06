@@ -140,6 +140,11 @@ ZIMGUI_API bool zimgui_sliderInt(const char* label, int* v, int min, int max)
   return ImGui::SliderInt(label, v, min, max);
 }
 
+ZIMGUI_API bool zimgui_sliderFloat(const char* label, float* v, float min, float max)
+{
+	return ImGui::SliderFloat(label, v, min, max);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 ZIMGUI_API void zimgui_calcTextSize(const char* text, size_t len, float wrap_width, float* x, float* y)

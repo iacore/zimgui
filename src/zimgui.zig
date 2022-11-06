@@ -198,6 +198,12 @@ pub fn sliderInt(comptime fmt: []const u8, args: anytype, v: *i32, min: i32, max
 }
 extern fn zimgui_sliderInt([*]const u8, *i32, i32, i32) bool;
 
+pub fn sliderFloat(comptime fmt: []const u8, args: anytype, v: *f32, min: f32, max: f32) bool {
+    var res = formatZ(fmt, args);
+    return zimgui_sliderFloat(res.ptr, v, min, max);
+}
+extern fn zimgui_sliderFloat([*]const u8, *f32, f32, f32) bool;
+
 ///////////////////////////////////////////////////////////////////////////////
 
 /// @param wrap_width Default -1.0
