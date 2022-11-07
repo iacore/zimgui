@@ -1,4 +1,4 @@
-#include "imgui.h"
+#include "zimgui_imgui_ext.h"
 #include "imgui_internal.h"
 
 #define ZIMGUI_API extern "C"
@@ -133,6 +133,11 @@ ZIMGUI_API void zimgui_image(unsigned int texture_id, float x, float y, float uv
 ZIMGUI_API bool zimgui_imageButton(unsigned int texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
 {
   return ImGui::ImageButton(texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y});
+}
+
+ZIMGUI_API bool zimgui_ext_imageButtonEx(unsigned int im_id, unsigned int texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
+{
+	return ImGui::ImageButtonEx(im_id, texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y}, {1, 1}, {0, 0, 0, 0}, {1, 1, 1, 1});
 }
 
 ZIMGUI_API bool zimgui_sliderInt(const char* label, int* v, int min, int max)

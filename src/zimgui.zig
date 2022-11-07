@@ -194,6 +194,13 @@ pub fn imageButton(textureId: u32, size: Vec2, uv0: ?Vec2, uv1: ?Vec2) bool {
 }
 extern fn zimgui_imageButton(u32, f32, f32, f32, f32, f32, f32) bool;
 
+pub fn imageButtonEx(im_id: u32, texture_id: u32, size: Vec2, uv0: ?Vec2, uv1: ?Vec2) bool {
+    var uv0_: Vec2 = if (uv0) |uv0u| uv0u else Vec2{.x=0, .y=0};
+    var uv1_: Vec2 = if (uv1) |uv1u| uv1u else Vec2{.x=1, .y=1};
+    return zimgui_ext_imageButtonEx(im_id, texture_id, size.x, size.y, uv0_.x, uv0_.y, uv1_.x, uv1_.y);
+}
+extern fn zimgui_ext_imageButtonEx(u32, u32, f32, f32, f32, f32, f32, f32) bool;
+
 pub fn sliderInt(comptime fmt: []const u8, args: anytype, v: *i32, min: i32, max: i32) bool {
     var res = formatZ(fmt, args);
     return zimgui_sliderInt(res.ptr, v, min, max);
