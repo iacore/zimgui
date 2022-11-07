@@ -130,9 +130,9 @@ ZIMGUI_API void zimgui_image(unsigned int texture_id, float x, float y, float uv
   ImGui::Image(texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y});
 }
 
-ZIMGUI_API bool zimgui_imageButton(unsigned int texture_id, float x, float y)
+ZIMGUI_API bool zimgui_imageButton(unsigned int texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
 {
-  return ImGui::ImageButton(texture_id, {x, y});
+  return ImGui::ImageButton(texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y});
 }
 
 ZIMGUI_API bool zimgui_sliderInt(const char* label, int* v, int min, int max)
