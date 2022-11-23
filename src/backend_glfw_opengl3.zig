@@ -86,6 +86,11 @@ pub const OpenGl3 = struct {
     }
     extern fn zimgui_glGetError() i32;
 
+    pub fn generateTextureMipmap(id: TextureId) void {
+        zimgui_glGenerateTextureMipmap(id);
+    }
+    extern fn zimgui_glGenerateTextureMipmap(TextureId) void;
+
     const Error = error {
         Error,
     };
