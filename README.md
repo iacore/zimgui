@@ -13,7 +13,7 @@ pub fn build(b: *Builder) void {
     var exe = ...;
 
     exe.addPackagePath("zimgui", "deps/zimgui/src/zimgui.zig");
-    _ = zimgui.link(b, exe);
+    _ = zimgui.link(b, exe, .{});
 
     exe.addPackagePath("zimgui_backend", "deps/zimgui/src/backend_glfw_opengl3.zig");
     addBackendGlfwOpenGl3(b, exe);

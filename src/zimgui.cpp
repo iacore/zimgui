@@ -54,10 +54,10 @@ ZIMGUI_API void zimgui_showMetricsWindow(bool* open)
   ImGui::ShowMetricsWindow(open);
 }
 
-ZIMGUI_API void zimgui_showStackToolWindow(bool* open)
-{
-  ImGui::ShowStackToolWindow(open);
-}
+// ZIMGUI_API void zimgui_showStackToolWindow(bool* open)
+// {
+//   ImGui::ShowStackToolWindow(open);
+// }
 
 ZIMGUI_API const char* zimgui_getVersion()
 {
@@ -125,17 +125,17 @@ ZIMGUI_API bool zimgui_button(const char* text, float x, float y)
   return ImGui::Button(text, {x, y});
 }
 
-ZIMGUI_API void zimgui_image(unsigned int texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
+ZIMGUI_API void zimgui_image(ImTextureID texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
 {
   ImGui::Image(texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y});
 }
 
-ZIMGUI_API bool zimgui_imageButton(unsigned int texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
+ZIMGUI_API bool zimgui_imageButton(ImTextureID texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
 {
   return ImGui::ImageButton(texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y});
 }
 
-ZIMGUI_API bool zimgui_ext_imageButtonEx(unsigned int im_id, unsigned int texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
+ZIMGUI_API bool zimgui_ext_imageButtonEx(ImGuiID im_id, ImTextureID texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
 {
 	return ImGui::ImageButtonEx(im_id, texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y}, {1, 1}, {0, 0, 0, 0}, {1, 1, 1, 1});
 }
