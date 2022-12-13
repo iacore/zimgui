@@ -40,8 +40,8 @@ pub const OpenGl3 = struct {
 
     /// Usual clear masks:
     ///  COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT
-    pub fn clear(mask: Enum) void {
-        zimgui_glClear(mask.value);
+    pub fn clear(mask: Enum.ValueType) void {
+        zimgui_glClear(mask);
     }
     extern fn zimgui_glClear(Enum.ValueType) void;
 
@@ -141,8 +141,8 @@ pub const OpenGl3 = struct {
     ///
     /// gl.enable(.{.value = gl.Enum.DEBUG_OUTPUT});
     ///
-    pub fn enable(cap: Enum) void {
-        zimgui_glEnable(cap.value);
+    pub fn enable(cap: Enum.ValueType) void {
+        zimgui_glEnable(cap);
     }
     extern fn zimgui_glEnable(cap: Enum.ValueType) void;
 
