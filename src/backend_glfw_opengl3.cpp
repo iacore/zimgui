@@ -91,6 +91,11 @@ ZIMGUI_API void zimgui_glGenerateTextureMipmap(uint id)
   glGenerateTextureMipmap(id);
 }
 
+ZIMGUI_API void zimgui_glPixelStorei(uint pname, int param)
+{
+  glPixelStorei(pname, param);
+}
+
 ZIMGUI_API void zimgui_glDebugMessageCallback(GLDEBUGPROC callback, const void *user_param)
 {
   glDebugMessageCallback(callback, user_param);

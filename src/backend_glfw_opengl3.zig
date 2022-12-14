@@ -91,6 +91,11 @@ pub const OpenGl3 = struct {
     }
     extern fn zimgui_glGenerateTextureMipmap(TextureId) void;
 
+    pub fn pixelStorei(pname: Enum.ValueType, param: i32) void {
+        zimgui_glPixelStorei(pname, param);
+    }
+    extern fn zimgui_glPixelStorei(Enum.ValueType, i32) void;
+
     const Error = error {
         Error,
     };

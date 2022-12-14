@@ -97,4 +97,28 @@ pub fn free(returned_slice_from_load: []u8) void {
 }
 extern fn zimage_free([*]u8) void;
 
+///////////////////////////////////////////////////////////////////////////////
+
+const std = @import("std");
+
+gpa: std.heap.GeneralPurposeAllocator(.{.thread_safe = true}) = std.heap.GeneralPurposeAllocator(.{.thread_safe = true}){},
+const Self = @This();
+
+fn zimgui_malloc(size: usize) callconv(.C) *u8 {
+    var allocator = Self.gpa.allocator();
+    var res = allocator.alloc(size);
+    return res.ptr;
+}
+
+fn zimgui_realloc(ptr: *u8, size: usize) callconv(.C) *u8 {
+    var allocator = Self.gpa.allocator();
+    var res = allocator.realloc(ptr, size);
+    return res.ptr;
+}
+
+fn zimgui_free(ptr: *u8) callconv(.C) void {
+    var allocator = Self.gpa.allocator();
+    allocator.free(ptr);
+}
+
 //
