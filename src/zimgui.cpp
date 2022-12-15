@@ -86,6 +86,11 @@ ZIMGUI_API void zimgui_setNextWindowSize(float sizex, float sizey, unsigned int 
   ImGui::SetNextWindowSize({sizex, sizey}, cond);
 }
 
+ZIMGUI_API void zimgui_setNextWindowFocus()
+{
+  ImGui::SetNextWindowFocus();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 ZIMGUI_API void zimgui_pushStyleColor(ImGuiCol_ style_col, unsigned int color)

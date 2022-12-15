@@ -128,6 +128,11 @@ pub fn setNextWindowSize(size: Vec2, cond: GuiCond) void {
 }
 extern fn zimgui_setNextWindowSize(f32, f32, u32) void;
 
+pub fn setNextWindowFocus() void {
+    zimgui_setNextWindowFocus();
+}
+extern fn zimgui_setNextWindowFocus() void;
+
 // set next window size. set axis to 0.0f to force an auto-fit on this axis. call before Begin()
 
 ///////////////////////////////////////////////////////////////////////////////
