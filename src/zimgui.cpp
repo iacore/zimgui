@@ -3,6 +3,8 @@
 
 #define ZIMGUI_API extern "C"
 
+typedef unsigned int uint;
+
 ///////////////////////////////////////////////////////////////////////////////
 
 ZIMGUI_API ImGuiContext* zimgui_createContext(ImFontAtlas* shared_font_atlas)
@@ -145,6 +147,8 @@ ZIMGUI_API bool zimgui_ext_imageButtonEx(unsigned int im_id, unsigned int textur
 	return ImGui::ImageButtonEx(im_id, texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y}, {1, 1}, {0, 0, 0, 0}, {1, 1, 1, 1});
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 ZIMGUI_API bool zimgui_beginCombo(const char* label, const char* preview_value, ImGuiComboFlags flag)
 {
   return ImGui::BeginCombo(label, preview_value, flag);
@@ -160,6 +164,8 @@ ZIMGUI_API bool zimgui_selectable(const char* label, bool selected, ImGuiSelecta
   return ImGui::Selectable(label, selected, flags, {x, y});
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 ZIMGUI_API bool zimgui_sliderInt(const char* label, int* v, int min, int max)
 {
   return ImGui::SliderInt(label, v, min, max);
@@ -168,6 +174,38 @@ ZIMGUI_API bool zimgui_sliderInt(const char* label, int* v, int min, int max)
 ZIMGUI_API bool zimgui_sliderFloat(const char* label, float* v, float min, float max)
 {
 	return ImGui::SliderFloat(label, v, min, max);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+ZIMGUI_API bool zimgui_beginTable(const char* label, int column, uint flags, float x, float y, float inner_width)
+{
+  ImGui::BeginTable(label, column, flags, {x, y}, inner_width);
+}
+
+ZIMGUI_API void zimgui_endTable()
+{
+  ImGui::EndTable();
+}
+
+ZIMGUI_API void zimgui_tableNextColumn()
+{
+  ImGui::TableNextColumn();
+}
+
+ZIMGUI_API void zimgui_tableSetupColumn(const char* label, uint flags, float init_width_or_weight, ImGuiID user_id)
+{
+  ImGui::TableSetupColumn(label, flags, init_width_or_weight, user_id);
+}
+
+ZIMGUI_API void zimgui_tableSetupScrollFreeze(int cols, int rows)
+{
+  ImGui::TableSetupScrollFreeze(cols, rows);
+}
+
+ZIMGUI_API void zimgui_tableHeadersRow()
+{
+  ImGui::TableHeadersRow();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

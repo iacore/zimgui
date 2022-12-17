@@ -206,20 +206,16 @@ pub fn imageButtonEx(im_id: u32, texture_id: u32, size: Vec2, uv0: ?Vec2, uv1: ?
 }
 extern fn zimgui_ext_imageButtonEx(u32, u32, f32, f32, f32, f32, f32, f32) bool;
 
+///////////////////////////////////////////////////////////////////////////////
+
 /// Widgets: Combo Box
 /// - The BeginCombo()/EndCombo() api allows you to manage your contents and selection state however you want it, by creating e.g. Selectable() items.
 pub fn beginCombo(label: []const u8, preview_value: []const u8, flags: ComboFlags) bool {
     var b1: [1024]u8 = undefined;
-    std.mem.copy(u8, &b1, if (label.len > 1024) label[0..1024] else label);
-    var l: []u8 = b1[0..0];
-    l.len = std.math.min(label.len, 1023);
-    b1[l.len] = 0;
+    var l = copyZ(&b1, label);
 
     var b2: [1024]u8 = undefined;
-    std.mem.copy(u8, &b2, if (preview_value.len > 1023) preview_value[0..1023] else preview_value);
-    var pv: []u8 = b1[0..0];
-    pv.len = std.math.min(preview_value.len, 1023);
-    b2[pv.len] = 0;
+    var pv = copyZ(&b2, preview_value);
 
     return zimgui_beginCombo(l.ptr, pv.ptr, @enumToInt(flags));
 }
@@ -233,8 +229,7 @@ extern fn zimgui_endCombo() void;
 
 pub fn selectable(label: []const u8, selected: bool, flags: SelectableFlags, size: ?Vec2) bool {
     var b: [1024]u8 = undefined;
-    b[0] = 0;
-    var l = std.fmt.bufPrintZ(&b, "{s}", .{label}) catch b[0..0 :0];
+    var l = copyZ(&b, label);
 
     if (size) |s| {
         return zimgui_selectable(l.ptr, selected, @enumToInt(flags), s.x, s.y);
@@ -243,6 +238,8 @@ pub fn selectable(label: []const u8, selected: bool, flags: SelectableFlags, siz
     }
 }
 extern fn zimgui_selectable([*]const u8, bool, u32, f32, f32) bool;
+
+///////////////////////////////////////////////////////////////////////////////
 
 pub fn sliderInt(comptime fmt: []const u8, args: anytype, v: *i32, min: i32, max: i32) bool {
     var res = formatZ(fmt, args);
@@ -255,6 +252,81 @@ pub fn sliderFloat(comptime fmt: []const u8, args: anytype, v: *f32, min: f32, m
     return zimgui_sliderFloat(res.ptr, v, min, max);
 }
 extern fn zimgui_sliderFloat([*]const u8, *f32, f32, f32) bool;
+
+///////////////////////////////////////////////////////////////////////////////
+
+/// Tables
+/// - Full-featured replacement for old Columns API.
+/// - See Demo->Tables for demo code. See top of imgui_tables.cpp for general commentary.
+/// - See ImGuiTableFlags_ and ImGuiTableColumnFlags_ enums for a description of available flags.
+/// The typical call flow is:
+/// - 1. Call BeginTable(), early out if returning false.
+/// - 2. Optionally call TableSetupColumn() to submit column name/flags/defaults.
+/// - 3. Optionally call TableSetupScrollFreeze() to request scroll freezing of columns/rows.
+/// - 4. Optionally call TableHeadersRow() to submit a header row. Names are pulled from TableSetupColumn() data.
+/// - 5. Populate contents:
+///    - In most situations you can use TableNextRow() + TableSetColumnIndex(N) to start appending into a column.
+///    - If you are using tables as a sort of grid, where every columns is holding the same type of contents,
+///      you may prefer using TableNextColumn() instead of TableNextRow() + TableSetColumnIndex().
+///      TableNextColumn() will automatically wrap-around into the next row if needed.
+///    - IMPORTANT: Comparatively to the old Columns() API, we need to call TableNextColumn() for the first column!
+///    - Summary of possible call flow:
+///    - Summary of possible call flow:
+///        --------------------------------------------------------------------------------------------------------
+///        TableNextColumn() -> Text("Hello 0") -> TableNextColumn() -> Text("Hello 1")  // OK: TableNextColumn() automatically gets to next row!
+///        --------------------------------------------------------------------------------------------------------
+/// - 5. Call EndTable()
+pub fn beginTable(comptime fmt: []const u8, args: anytype, column: i32, flags: TableFlags, outer_size: ?Vec2, inner_width: f32) bool {
+    var l = formatZ(fmt, args);
+
+    if (outer_size) |s| {
+        return zimgui_beginTable(l.ptr, column, @enumToInt(flags), s.x, s.y, inner_width);
+    } else {
+        return zimgui_beginTable(l.ptr, column, @enumToInt(flags), 0, 0, inner_width);
+    }
+}
+extern fn zimgui_beginTable([*]const u8, i32, u32, f32, f32, f32) bool;
+
+/// only call EndTable() if BeginTable() returns true!
+pub fn endTable() void {
+    zimgui_endTable();
+}
+extern fn zimgui_endTable() void;
+
+/// append into the next column (or first column of next row if currently in last column). Return true when column is visible.
+pub fn tableNextColumn() void {
+    zimgui_tableNextColumn();
+}
+extern fn zimgui_tableNextColumn() void;
+
+const GuiId = u32;
+
+/// Tables: Headers & Columns declaration
+/// - Use TableSetupColumn() to specify label, resizing policy, default width/weight, id, various other flags etc.
+/// - Use TableHeadersRow() to create a header row and automatically submit a TableHeader() for each column.
+///   Headers are required to perform: reordering, sorting, and opening the context menu.
+///   The context menu can also be made available in columns body using ImGuiTableFlags_ContextMenuInBody.
+/// - You may manually submit headers using TableNextRow() + TableHeader() calls, but this is only useful in
+///   some advanced use cases (e.g. adding custom widgets in header row).
+/// - Use TableSetupScrollFreeze() to lock columns/rows so they stay visible when scrolled.
+pub fn tableSetupColumn(comptime fmt: []const u8, args: anytype, flags: TableColumnFlags, init_width_or_weight: f32, user_id: GuiId) void {
+    var l = formatZ(fmt, args);
+
+    zimgui_tableSetupColumn(l.ptr, @enumToInt(flags), init_width_or_weight, user_id);
+}
+extern fn zimgui_tableSetupColumn([*]const u8, u32, f32, GuiId) void;
+
+/// lock columns/rows so they stay visible when scrolled.
+pub fn tableSetupScrollFreeze(cols: i32, rows: i32) void {
+    zimgui_tableSetupScrollFreeze(cols, rows);
+}
+extern fn zimgui_tableSetupScrollFreeze(i32, i32) void;
+
+/// submit all headers cells based on data provided to TableSetupColumn() + submit context menu
+pub fn tableHeadersRow() void {
+    zimgui_tableHeadersRow();
+}
+extern fn zimgui_tableHeadersRow() void;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -639,6 +711,125 @@ const ComboFlags = enum(u32) {
     NoPreview               = 1 << 6,   // Display only a square arrow button
 };
 
+// Flags for ImGui::BeginTable()
+// - Important! Sizing policies have complex and subtle side effects, much more so than you would expect.
+//   Read comments/demos carefully + experiment with live demos to get acquainted with them.
+// - The DEFAULT sizing policies are:
+//    - Default to ImGuiTableFlags_SizingFixedFit    if ScrollX is on, or if host window has ImGuiWindowFlags_AlwaysAutoResize.
+//    - Default to ImGuiTableFlags_SizingStretchSame if ScrollX is off.
+// - When ScrollX is off:
+//    - Table defaults to ImGuiTableFlags_SizingStretchSame -> all Columns defaults to ImGuiTableColumnFlags_WidthStretch with same weight.
+//    - Columns sizing policy allowed: Stretch (default), Fixed/Auto.
+//    - Fixed Columns (if any) will generally obtain their requested width (unless the table cannot fit them all).
+//    - Stretch Columns will share the remaining width according to their respective weight.
+//    - Mixed Fixed/Stretch columns is possible but has various side-effects on resizing behaviors.
+//      The typical use of mixing sizing policies is: any number of LEADING Fixed columns, followed by one or two TRAILING Stretch columns.
+//      (this is because the visible order of columns have subtle but necessary effects on how they react to manual resizing).
+// - When ScrollX is on:
+//    - Table defaults to ImGuiTableFlags_SizingFixedFit -> all Columns defaults to ImGuiTableColumnFlags_WidthFixed
+//    - Columns sizing policy allowed: Fixed/Auto mostly.
+//    - Fixed Columns can be enlarged as needed. Table will show an horizontal scrollbar if needed.
+//    - When using auto-resizing (non-resizable) fixed columns, querying the content width to use item right-alignment e.g. SetNextItemWidth(-FLT_MIN) doesn't make sense, would create a feedback loop.
+//    - Using Stretch columns OFTEN DOES NOT MAKE SENSE if ScrollX is on, UNLESS you have specified a value for 'inner_width' in BeginTable().
+//      If you specify a value for 'inner_width' then effectively the scrolling space is known and Stretch or mixed Fixed/Stretch columns become meaningful again.
+// - Read on documentation at the top of imgui_tables.cpp for details.
+const TableFlags = enum(u32) {
+    // Features
+    None                       = 0,
+    Resizable                  = 1 << 0,   // Enable resizing columns.
+    Reorderable                = 1 << 1,   // Enable reordering columns in header row (need calling TableSetupColumn() + TableHeadersRow() to display headers)
+    Hideable                   = 1 << 2,   // Enable hiding/disabling columns in context menu.
+    Sortable                   = 1 << 3,   // Enable sorting. Call TableGetSortSpecs() to obtain sort specs. Also see SortMulti and SortTristate.
+    NoSavedSettings            = 1 << 4,   // Disable persisting columns order, width and sort settings in the .ini file.
+    ContextMenuInBody          = 1 << 5,   // Right-click on columns body/contents will display table context menu. By default it is available in TableHeadersRow().
+    // Decorations
+    RowBg                      = 1 << 6,   // Set each RowBg color with ImGuiCol_TableRowBg or ImGuiCol_TableRowBgAlt (equivalent of calling TableSetBgColor with ImGuiTableBgFlags_RowBg0 on each row manually)
+    BordersInnerH              = 1 << 7,   // Draw horizontal borders between rows.
+    BordersOuterH              = 1 << 8,   // Draw horizontal borders at the top and bottom.
+    BordersInnerV              = 1 << 9,   // Draw vertical borders between columns.
+    BordersOuterV              = 1 << 10,  // Draw vertical borders on the left and right sides.
+    BordersH                   = 1 << 7 | 1 << 8, // Draw horizontal borders.
+    BordersV                   = 1 << 9 | 1 << 10, // Draw vertical borders.
+    BordersInner               = 1 << 9 | 1 << 7, // Draw inner borders.
+    BordersOuter               = 1 << 10 | 1 << 8, // Draw outer borders.
+    Borders                    = 1 << 9 | 1 << 7 | 1 << 10 | 1 << 8,   // Draw all borders.
+    NoBordersInBody            = 1 << 11,  // [ALPHA] Disable vertical borders in columns Body (borders will always appears in Headers). -> May move to style
+    NoBordersInBodyUntilResize = 1 << 12,  // [ALPHA] Disable vertical borders in columns Body until hovered for resize (borders will always appears in Headers). -> May move to style
+    // Sizing Policy (read above for defaults)
+    SizingFixedFit             = 1 << 13,  // Columns default to _WidthFixed or _WidthAuto (if resizable or not resizable), matching contents width.
+    SizingFixedSame            = 2 << 13,  // Columns default to _WidthFixed or _WidthAuto (if resizable or not resizable), matching the maximum contents width of all columns. Implicitly enable NoKeepColumnsVisible.
+    SizingStretchProp          = 3 << 13,  // Columns default to _WidthStretch with default weights proportional to each columns contents widths.
+    SizingStretchSame          = 4 << 13,  // Columns default to _WidthStretch with default weights all equal, unless overridden by TableSetupColumn().
+    // Sizing Extra Options
+    NoHostExtendX              = 1 << 16,  // Make outer width auto-fit to columns, overriding outer_size.x value. Only available when ScrollX/ScrollY are disabled and Stretch columns are not used.
+    NoHostExtendY              = 1 << 17,  // Make outer height stop exactly at outer_size.y (prevent auto-extending table past the limit). Only available when ScrollX/ScrollY are disabled. Data below the limit will be clipped and not visible.
+    NoKeepColumnsVisible       = 1 << 18,  // Disable keeping column always minimally visible when ScrollX is off and table gets too small. Not recommended if columns are resizable.
+    PreciseWidths              = 1 << 19,  // Disable distributing remainder width to stretched columns (width allocation on a 100-wide table with 3 columns: Without this flag: 33,33,34. With this flag: 33,33,33). With larger number of columns, resizing will appear to be less smooth.
+    // Clipping
+    NoClip                     = 1 << 20,  // Disable clipping rectangle for every individual columns (reduce draw command count, items will be able to overflow into other columns). Generally incompatible with TableSetupScrollFreeze().
+    // Padding
+    PadOuterX                  = 1 << 21,  // Default if BordersOuterV is on. Enable outer-most padding. Generally desirable if you have headers.
+    NoPadOuterX                = 1 << 22,  // Default if BordersOuterV is off. Disable outer-most padding.
+    NoPadInnerX                = 1 << 23,  // Disable inner padding between columns (double inner padding if BordersOuterV is on, single inner padding if BordersOuterV is off).
+    // Scrolling
+    ScrollX                    = 1 << 24,  // Enable horizontal scrolling. Require 'outer_size' parameter of BeginTable() to specify the container size. Changes default sizing policy. Because this create a child window, ScrollY is currently generally recommended when using ScrollX.
+    ScrollY                    = 1 << 25,  // Enable vertical scrolling. Require 'outer_size' parameter of BeginTable() to specify the container size.
+    // Sorting
+    SortMulti                  = 1 << 26,  // Hold shift when clicking headers to sort on multiple column. TableGetSortSpecs() may return specs where (SpecsCount > 1).
+    SortTristate               = 1 << 27,  // Allow no sorting, disable default sorting. TableGetSortSpecs() may return specs where (SpecsCount == 0).
+};
+
+// Flags for ImGui::TableSetupColumn()
+const TableColumnFlags = enum (u32) {
+    // Input configuration flags
+    None                  = 0,
+    Disabled              = 1 << 0,   // Overriding/master disable flag: hide column, won't show in context menu (unlike calling TableSetColumnEnabled() which manipulates the user accessible state)
+    DefaultHide           = 1 << 1,   // Default as a hidden/disabled column.
+    DefaultSort           = 1 << 2,   // Default as a sorting column.
+    WidthStretch          = 1 << 3,   // Column will stretch. Preferable with horizontal scrolling disabled (default if table sizing policy is _SizingStretchSame or _SizingStretchProp).
+    WidthFixed            = 1 << 4,   // Column will not stretch. Preferable with horizontal scrolling enabled (default if table sizing policy is _SizingFixedFit and table is resizable).
+    NoResize              = 1 << 5,   // Disable manual resizing.
+    NoReorder             = 1 << 6,   // Disable manual reordering this column, this will also prevent other columns from crossing over this column.
+    NoHide                = 1 << 7,   // Disable ability to hide/disable this column.
+    NoClip                = 1 << 8,   // Disable clipping for this column (all NoClip columns will render in a same draw command).
+    NoSort                = 1 << 9,   // Disable ability to sort on this field (even if Sortable is set on the table).
+    NoSortAscending       = 1 << 10,  // Disable ability to sort in the ascending direction.
+    NoSortDescending      = 1 << 11,  // Disable ability to sort in the descending direction.
+    NoHeaderLabel         = 1 << 12,  // TableHeadersRow() will not submit label for this column. Convenient for some small columns. Name will still appear in context menu.
+    NoHeaderWidth         = 1 << 13,  // Disable header text width contribution to automatic column width.
+    PreferSortAscending   = 1 << 14,  // Make the initial sort direction Ascending when first sorting on this column (default).
+    PreferSortDescending  = 1 << 15,  // Make the initial sort direction Descending when first sorting on this column.
+    IndentEnable          = 1 << 16,  // Use current Indent value when entering cell (default for column 0).
+    IndentDisable         = 1 << 17,  // Ignore current Indent value when entering cell (default for columns > 0). Indentation changes _within_ the cell will still be honored.
+
+    // Output status flags, read-only via TableGetColumnFlags()
+    IsEnabled             = 1 << 24,  // Status: is enabled == not hidden by user/api (referred to as "Hide" in _DefaultHide and _NoHide) flags.
+    IsVisible             = 1 << 25,  // Status: is visible == is enabled AND not clipped by scrolling.
+    IsSorted              = 1 << 26,  // Status: is currently part of the sort specs
+    IsHovered             = 1 << 27,  // Status: is hovered by mouse
+};
+
+// Flags for ImGui::TableNextRow()
+const TableRowFlags = enum (u32) {
+    None                     = 0,
+    Headers                  = 1 << 0,   // Identify header row (set default background color + width of its contents accounted differently for auto column width)
+};
+
+// Enum for ImGui::TableSetBgColor()
+// Background colors are rendering in 3 layers:
+//  - Layer 0: draw with RowBg0 color if set, otherwise draw with ColumnBg0 if set.
+//  - Layer 1: draw with RowBg1 color if set, otherwise draw with ColumnBg1 if set.
+//  - Layer 2: draw with CellBg color if set.
+// The purpose of the two row/columns layers is to let you decide if a background color changes should override or blend with the existing color.
+// When using RowBg on the table, each row has the RowBg0 color automatically set for odd/even rows.
+// If you set the color of RowBg0 target, your color will override the existing RowBg0 color.
+// If you set the color of RowBg1 or ColumnBg1 target, your color will blend over the RowBg0 color.
+const TableBgTarget = enum(u32) {
+    None                     = 0,
+    RowBg0                   = 1,        // Set row background color 0 (generally used for background, automatically set when RowBg is used)
+    RowBg1                   = 2,        // Set row background color 1 (generally used for selection marking)
+    CellBg                   = 3,        // Set cell background color (top-most color)
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // Zinc Extensions
@@ -768,4 +959,16 @@ pub fn formatZ(comptime fmt: []const u8, args: anytype) [:0]const u8 {
     const len = std.fmt.count(fmt, args);
     if (len > fmt_buffer.items.len) fmt_buffer.resize(len + 64) catch unreachable;
     return std.fmt.bufPrintZ(fmt_buffer.items, fmt, args) catch unreachable;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+/// Null terminate `source` into `dest` buffer, potentially clamping it to fit.
+fn copyZ(dest: []u8, source: []const u8) [:0]const u8 {
+    std.mem.copy(u8, dest, if (source.len > dest.len) source[0..dest.len-1] else source);
+    var slice: []u8 = dest[0.. if (source.len > dest.len) dest.len else source.len+1];
+    dest[slice.len-1] = 0;
+
+    var a = slice[0..slice.len-1 :0];
+    return a;
 }
