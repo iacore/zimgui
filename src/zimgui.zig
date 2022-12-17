@@ -206,6 +206,44 @@ pub fn imageButtonEx(im_id: u32, texture_id: u32, size: Vec2, uv0: ?Vec2, uv1: ?
 }
 extern fn zimgui_ext_imageButtonEx(u32, u32, f32, f32, f32, f32, f32, f32) bool;
 
+/// Widgets: Combo Box
+/// - The BeginCombo()/EndCombo() api allows you to manage your contents and selection state however you want it, by creating e.g. Selectable() items.
+pub fn beginCombo(label: []const u8, preview_value: []const u8, flags: ComboFlags) bool {
+    var b1: [1024]u8 = undefined;
+    std.mem.copy(u8, &b1, if (label.len > 1024) label[0..1024] else label);
+    var l: []u8 = b1[0..0];
+    l.len = std.math.min(label.len, 1023);
+    b1[l.len] = 0;
+
+    var b2: [1024]u8 = undefined;
+    std.mem.copy(u8, &b2, if (preview_value.len > 1023) preview_value[0..1023] else preview_value);
+    var pv: []u8 = b1[0..0];
+    pv.len = std.math.min(preview_value.len, 1023);
+    b2[pv.len] = 0;
+
+    return zimgui_beginCombo(l.ptr, pv.ptr, @enumToInt(flags));
+}
+extern fn zimgui_beginCombo([*]const u8, [*]const u8, u32) bool;
+
+/// only call EndCombo() if BeginCombo() returns true!
+pub fn endCombo() void {
+    zimgui_endCombo();
+}
+extern fn zimgui_endCombo() void;
+
+pub fn selectable(label: []const u8, selected: bool, flags: SelectableFlags, size: ?Vec2) bool {
+    var b: [1024]u8 = undefined;
+    b[0] = 0;
+    var l = std.fmt.bufPrintZ(&b, "{s}", .{label}) catch b[0..0 :0];
+
+    if (size) |s| {
+        return zimgui_selectable(l.ptr, selected, @enumToInt(flags), s.x, s.y);
+    } else {
+        return zimgui_selectable(l.ptr, selected, @enumToInt(flags), 0, 0);
+    }
+}
+extern fn zimgui_selectable([*]const u8, bool, u32, f32, f32) bool;
+
 pub fn sliderInt(comptime fmt: []const u8, args: anytype, v: *i32, min: i32, max: i32) bool {
     var res = formatZ(fmt, args);
     return zimgui_sliderInt(res.ptr, v, min, max);
@@ -578,6 +616,29 @@ pub const DrawFlags = enum(u32) {
     //RoundCornersDefault_        = RoundCornersAll, // Default to ALL corners if none of the _RoundCornersXX flags are specified.
     RoundCornersMask_           = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7 | 1 << 8,
 };
+
+// Flags for ImGui::Selectable()
+const SelectableFlags = enum(u32) {
+    None               = 0,
+    DontClosePopups    = 1 << 0,   // Clicking this don't close parent popup window
+    SpanAllColumns     = 1 << 1,   // Selectable frame can span all columns (text will still fit in current column)
+    AllowDoubleClick   = 1 << 2,   // Generate press events on double clicks too
+    Disabled           = 1 << 3,   // Cannot be selected, display grayed out text
+    AllowItemOverlap   = 1 << 4,   // (WIP) Hit testing to allow subsequent widgets to overlap this one
+};
+
+// Flags for ImGui::BeginCombo()
+const ComboFlags = enum(u32) {
+    None                    = 0,
+    PopupAlignLeft          = 1 << 0,   // Align the popup toward the left by default
+    HeightSmall             = 1 << 1,   // Max ~4 items visible. Tip: If you want your combo popup to be a specific size you can use SetNextWindowSizeConstraints() prior to calling BeginCombo()
+    HeightRegular           = 1 << 2,   // Max ~8 items visible (default)
+    HeightLarge             = 1 << 3,   // Max ~20 items visible
+    HeightLargest           = 1 << 4,   // As many fitting items as possible
+    NoArrowButton           = 1 << 5,   // Display on the preview box without the square arrow button
+    NoPreview               = 1 << 6,   // Display only a square arrow button
+};
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // Zinc Extensions
