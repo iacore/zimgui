@@ -31,7 +31,7 @@ ZIMGUI_API void zimgui_ImGui_ImplOpenGl3_RenderDrawData(void* draw_data)
   ImGui_ImplOpenGL3_RenderDrawData(reinterpret_cast<ImDrawData*>(draw_data));
 }
 
-ZIMGUI_API void zimgui_glViewport(int x, int y, size_t width, size_t height)
+ZIMGUI_API void zimgui_glViewport(int x, int y, int width, int height)
 {
   glViewport(x, y, width, height);
 }
@@ -95,6 +95,60 @@ ZIMGUI_API void zimgui_glPixelStorei(uint pname, int param)
 {
   glPixelStorei(pname, param);
 }
+
+ZIMGUI_API void zimgui_glUseProgram(uint program)
+{
+  glUseProgram(program);
+}
+
+ZIMGUI_API void zimgui_glDrawElements(GLenum mode, GLsizei count, GLenum type, const void *indices)
+{
+  glDrawElements(mode, count, type, indices);
+}
+
+ZIMGUI_API void zimgui_glBindVertexArray(GLuint array)
+{
+  glBindVertexArray(array);
+}
+
+ZIMGUI_API void zimgui_glUniform4fv(GLint location, GLsizei count, const GLfloat *value)
+{
+  glUniform4fv(location, count, value);
+}
+
+ZIMGUI_API int zimgui_glGetUniformLocation(GLuint program, const GLchar *name)
+{
+  return glGetUniformLocation(program, name);
+}
+
+ZIMGUI_API void zimgui_glBlendFunc(GLenum sfactor, GLenum dfactor)
+{
+  glBlendFunc(sfactor, dfactor);
+}
+
+ZIMGUI_API void zimgui_glCreateBuffers(GLsizei n, GLuint *buffers)
+{
+  glCreateBuffers(n, buffers);
+}
+
+ZIMGUI_API void zimgui_glBindBuffer(GLenum target, GLuint buffer)
+{
+  glBindBuffer(target, buffer);
+}
+
+ZIMGUI_API void zimgui_glBufferData(GLenum target, GLsizeiptr size, const void *data, GLenum usage)
+{
+  glBufferData(target, size, data, usage);
+}
+
+ZIMGUI_API void zimgui_glCreateVertexArrays(GLsizei n, GLuint *arrays)
+{
+  glCreateVertexArrays(n, arrays);
+}
+
+//ZIMGUI_API void zimgui_glEnableVertexArrayAttrib
+
+// glVertexAttribPointer
 
 ZIMGUI_API void zimgui_glDebugMessageCallback(GLDEBUGPROC callback, const void *user_param)
 {

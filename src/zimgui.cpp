@@ -210,6 +210,28 @@ ZIMGUI_API void zimgui_tableHeadersRow()
 
 ///////////////////////////////////////////////////////////////////////////////
 
+ZIMGUI_API bool zimgui_beginPopup(const char* str_id, ImGuiWindowFlags flags)
+{
+  return ImGui::BeginPopup(str_id, flags);
+}
+
+ZIMGUI_API void zimgui_endPopup()
+{
+  ImGui::EndPopup();
+}
+
+ZIMGUI_API void zimgui_openPopup(const char* str_id, ImGuiPopupFlags flags)
+{
+  ImGui::OpenPopup(str_id, flags);
+}
+
+ZIMGUI_API void zimgui_closeCurrentPopup()
+{
+  ImGui::CloseCurrentPopup();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 ZIMGUI_API void zimgui_calcTextSize(const char* text, size_t len, float wrap_width, float* x, float* y)
 {
   auto vec = ImGui::CalcTextSize(text, text + len, false, wrap_width);

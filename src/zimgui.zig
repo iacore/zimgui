@@ -330,6 +330,58 @@ extern fn zimgui_tableHeadersRow() void;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/// Popups, Modals
+///  - They block normal mouse hovering detection (and therefore most mouse interactions) behind them.
+///  - If not modal: they can be closed by clicking anywhere outside them, or by pressing ESCAPE.
+///  - Their visibility state (~bool) is held internally instead of being held by the programmer as we are used to with regular Begin*() calls.
+///  - The 3 properties above are related: we need to retain popup visibility state in the library because popups may be closed as any time.
+///  - You can bypass the hovering restriction by using ImGuiHoveredFlags_AllowWhenBlockedByPopup when calling IsItemHovered() or IsWindowHovered().
+///  - IMPORTANT: Popup identifiers are relative to the current ID stack, so OpenPopup and BeginPopup generally needs to be at the same level of the stack.
+///    This is sometimes leading to confusing mistakes. May rework this in the future.
+
+/// Popups: begin/end functions
+///  - BeginPopup(): query popup state, if open start appending into the window. Call EndPopup() afterwards. ImGuiWindowFlags are forwarded to the window.
+///  - BeginPopupModal(): block every interactions behind the window, cannot be closed by user, add a dimming background, has a title bar.
+
+/// return true if the popup is open, and you can start outputting to it.
+pub fn beginPopup(str_id: []const u8, flags: WindowFlags) bool {
+    var buf: [1024]u8 = undefined;
+    var str_id_ = copyZ(&buf, str_id);
+    return zimgui_beginPopup(str_id_.ptr, @bitCast(u32, flags));
+}
+extern fn zimgui_beginPopup([*]const u8, u32) bool;
+
+/// only call EndPopup() if BeginPopupXXX() returns true!
+pub fn endPopup() void {
+    zimgui_endPopup();
+}
+extern fn zimgui_endPopup() void;
+
+/// Popups: open/close functions
+///  - OpenPopup(): set popup state to open. ImGuiPopupFlags are available for opening options.
+///  - If not modal: they can be closed by clicking anywhere outside them, or by pressing ESCAPE.
+///  - CloseCurrentPopup(): use inside the BeginPopup()/EndPopup() scope to close manually.
+///  - CloseCurrentPopup() is called by default by Selectable()/MenuItem() when activated (FIXME: need some options).
+///  - Use ImGuiPopupFlags_NoOpenOverExistingPopup to avoid opening a popup if there's already one at the same level. This is equivalent to e.g. testing for !IsAnyPopupOpen() prior to OpenPopup().
+///  - Use IsWindowAppearing() after BeginPopup() to tell if a window just opened.
+///  - IMPORTANT: Notice that for OpenPopupOnItemClick() we exceptionally default flags to 1 (== ImGuiPopupFlags_MouseButtonRight) for backward compatibility with older API taking 'int mouse_button = 1' parameter
+
+/// call to mark popup as open (don't call every frame!).
+pub fn openPopup(str_id: []const u8, flags: PopupFlags) void {
+    var buf: [1024]u8 = undefined;
+    var str_id_ = copyZ(&buf, str_id);
+    zimgui_openPopup(str_id_.ptr, @enumToInt(flags));
+}
+extern fn zimgui_openPopup([*]const u8, u32) void;
+
+/// manually close the popup we have begin-ed into.
+pub fn closeCurrentPopup() void {
+    zimgui_closeCurrentPopup();
+}
+extern fn zimgui_closeCurrentPopup() void;
+
+///////////////////////////////////////////////////////////////////////////////
+
 /// @param wrap_width Default -1.0
 pub fn calcTextSize(txt: []const u8, wrap_width: f32) Vec2 {
     var out: Vec2 = undefined;
@@ -569,7 +621,7 @@ pub const col32_a_mask = 0xFF000000;
 // Enums
 //
 
-// Flags for ImGui::Begin()
+/// Flags for ImGui::Begin()
 pub const WindowFlags = packed struct {
     NoTitleBar: bool = false,   // Disable title-bar
     NoResize: bool = false,   // Disable user resizing with the lower-right grip
@@ -610,7 +662,7 @@ pub const GuiCond = enum(u32) {
         Appearing     = 1 << 3,   // Set the variable if the object/window is appearing after being hidden/inactive (or the first time)
 };
 
-// Enumeration for PushStyleColor() / PopStyleColor()
+/// Enumeration for PushStyleColor() / PopStyleColor()
 pub const StyleCol = enum(u32) {
     Text,
     TextDisabled,
@@ -668,8 +720,8 @@ pub const StyleCol = enum(u32) {
     COUNT,
 };
 
-// Flags for ImDrawList functions
-// (Legacy: bit 0 must always correspond to ImDrawFlags_Closed to be backward compatible with old API using a bool. Bits 1..3 must be unused)
+/// Flags for ImDrawList functions
+/// (Legacy: bit 0 must always correspond to ImDrawFlags_Closed to be backward compatible with old API using a bool. Bits 1..3 must be unused)
 pub const DrawFlags = enum(u32) {
     None                        = 0,
     Closed                      = 1 << 0, // PathStroke(), AddPolyline(): specify that shape should be closed (Important: this is always == 1 for legacy reason)
@@ -689,7 +741,28 @@ pub const DrawFlags = enum(u32) {
     RoundCornersMask_           = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7 | 1 << 8,
 };
 
-// Flags for ImGui::Selectable()
+/// Flags for OpenPopup*(), BeginPopupContext*(), IsPopupOpen() functions.
+/// - To be backward compatible with older API which took an 'int mouse_button = 1' argument, we need to treat
+///   small flags values as a mouse button index, so we encode the mouse button in the first few bits of the flags.
+///   It is therefore guaranteed to be legal to pass a mouse button index in ImGuiPopupFlags.
+/// - For the same reason, we exceptionally default the ImGuiPopupFlags argument of BeginPopupContextXXX functions to 1 instead of 0.
+///   IMPORTANT: because the default parameter is 1 (==ImGuiPopupFlags_MouseButtonRight), if you rely on the default parameter
+///   and want to another another flag, you need to pass in the ImGuiPopupFlags_MouseButtonRight flag.
+/// - Multiple buttons currently cannot be combined/or-ed in those functions (we could allow it later).
+const PopupFlags = enum(u32) {
+    MouseButtonLeft         = 0,        // For BeginPopupContext*(): open on Left Mouse release. Guaranteed to always be == 0 (same as ImGuiMouseButton_Left)
+    MouseButtonRight        = 1,        // For BeginPopupContext*(): open on Right Mouse release. Guaranteed to always be == 1 (same as ImGuiMouseButton_Right)
+    MouseButtonMiddle       = 2,        // For BeginPopupContext*(): open on Middle Mouse release. Guaranteed to always be == 2 (same as ImGuiMouseButton_Middle)
+    MouseButtonMask_        = 0x1F,
+    //MouseButtonDefault_     = 1,
+    NoOpenOverExistingPopup = 1 << 5,   // For OpenPopup*(), BeginPopupContext*(): don't open if there's already a popup at the same level of the popup stack
+    NoOpenOverItems         = 1 << 6,   // For BeginPopupContextWindow(): don't return true when hovering items, only when hovering empty space
+    AnyPopupId              = 1 << 7,   // For IsPopupOpen(): ignore the ImGuiID parameter and test for any popup.
+    AnyPopupLevel           = 1 << 8,   // For IsPopupOpen(): search/test at any level of the popup stack (default test in the current level)
+    AnyPopup                = 1 << 7 | 1 << 8,
+};
+
+/// Flags for ImGui::Selectable()
 const SelectableFlags = enum(u32) {
     None               = 0,
     DontClosePopups    = 1 << 0,   // Clicking this don't close parent popup window
@@ -699,7 +772,7 @@ const SelectableFlags = enum(u32) {
     AllowItemOverlap   = 1 << 4,   // (WIP) Hit testing to allow subsequent widgets to overlap this one
 };
 
-// Flags for ImGui::BeginCombo()
+/// Flags for ImGui::BeginCombo()
 const ComboFlags = enum(u32) {
     None                    = 0,
     PopupAlignLeft          = 1 << 0,   // Align the popup toward the left by default
