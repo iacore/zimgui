@@ -82,6 +82,7 @@
 pub fn load(filename: [:0]const u8, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) ?[]u8 {
     var ptr: [*]u8 = undefined;
     if (zimage_load(filename.ptr, x, y, channels_in_file, desired_channels, &ptr)) {
+        if (x.* <= 0 and y.* <= 0) return null;
         var pixels = @intCast(usize, x.*) * @intCast(usize, y.*);
         var bytes = if (desired_channels == 0) @intCast(usize, channels_in_file.*) else @intCast(usize, desired_channels);
         var len = pixels * bytes;

@@ -56,7 +56,7 @@ ZIMGUI_API void zimgui_glBindTexture(uint target, uint texture)
   glBindTexture(target, texture);
 }
 
-ZIMGUI_API void zimgui_glDeleteTextures(size_t count, const uint* textures)
+ZIMGUI_API void zimgui_glDeleteTextures(int count, const uint* textures)
 {
   glDeleteTextures(count, textures);
 }
