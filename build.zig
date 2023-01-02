@@ -54,11 +54,11 @@ fn buildLibrary(b: *Builder, step: *std.build.LibExeObjStep) *std.build.LibExeOb
 
     step.defineCMacro("IMGUI_DISABLE_OBSOLETE_KEYIO", null);
     step.defineCMacro("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", null);
-    step.defineCMacro("IMGUI_IMPL_OPENGL_LOADER_GLAD", null);
+    // step.defineCMacro("IMGUI_IMPL_OPENGL_LOADER_GLAD", null);
 
     // In OpenGL3, this is our texture id, let imgui know.
-    step.defineCMacro("ImTextureID", "unsigned int");
-    lib.defineCMacro("ImTextureID", "unsigned int"); // TODO cgustafsson: should be behind OpenGL3 option
+    // step.defineCMacro("ImTextureID", "unsigned int");
+    // lib.defineCMacro("ImTextureID", "unsigned int"); // TODO cgustafsson: should be behind OpenGL3 option
 
     lib.addIncludePath(relativePath(b, "deps/imgui"));
     lib.addIncludePath(relativePath(b, "deps/stb"));
