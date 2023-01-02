@@ -67,22 +67,22 @@ extern fn zimgui_getDrawData() ?DrawData;
 ///////////////////////////////////////////////////////////////////////////////
 
 // create Demo window. demonstrate most ImGui features. call this to learn about the library! try to make it always available in your application!
-pub fn showDemoWindow(open: *bool) void {
+pub fn showDemoWindow(open: ?*bool) void {
     zimgui_showDemoWindow(open);
 }
-extern fn zimgui_showDemoWindow(*bool) void;
+extern fn zimgui_showDemoWindow(?*bool) void;
 
 // create Metrics/Debugger window. display Dear ImGui internals: windows, draw commands, various internal state, etc.
-pub fn showMetricsWindow(open: *bool) void {
+pub fn showMetricsWindow(open: ?*bool) void {
     zimgui_showMetricsWindow(open);
 }
-extern fn zimgui_showMetricsWindow(*bool) void;
+extern fn zimgui_showMetricsWindow(?*bool) void;
 
 // create Stack Tool window. hover items with mouse to query information about the source of their unique ID.
-pub fn showStackToolWindow(open: *bool) void {
+pub fn showStackToolWindow(open: ?*bool) void {
     zimgui_showStackToolWindow(open);
 }
-extern fn zimgui_showStackToolWindow(*bool) void;
+extern fn zimgui_showStackToolWindow(?*bool) void;
 
 pub fn getVersion() [*:0]const u8 {
     return zimgui_getVersion();
