@@ -5,6 +5,8 @@ pub const BuildOptions = struct {
     build_mode: ?std.builtin.Mode = null,
     target: ?std.zig.CrossTarget = null,
     impl_opengl3: bool = false,
+    disable_obsolete_keyio: bool = false,
+    disable_obsolete_functions: bool = false,
 };
 
 /// Build and link zig imgui bindings.
@@ -16,8 +18,12 @@ pub fn link(b: *Builder, exe: *std.build.LibExeObjStep, _opts: BuildOptions) *st
     var opts: BuildOptions = _opts;
     if (opts.build_mode == null) opts.build_mode = exe.build_mode;
     if (opts.target == null) opts.target = exe.target;
+    if (opts.disable_obsolete_keyio) exe.defineCMacro("IMGUI_DISABLE_OBSOLETE_KEYIO", null);
+    if (opts.disable_obsolete_functions) exe.defineCMacro("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", null);
+
     const lib = buildLibrary(b, opts);
     exe.linkLibrary(lib);
+    
     return lib;
 }
 
@@ -38,9 +44,6 @@ pub fn buildLibrary(b: *Builder, opts: BuildOptions) *std.build.LibExeObjStep {
         relativePath(b, "deps/imgui/imgui_demo.cpp"),
         relativePath(b, "deps/stb/stb_image.c"),
         }, &[_][]const u8{});
-
-    lib.defineCMacro("IMGUI_DISABLE_OBSOLETE_KEYIO", null);
-    lib.defineCMacro("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", null);
     
     if (opts.impl_opengl3) {
         // In OpenGL3, this is our texture id, let imgui know.
