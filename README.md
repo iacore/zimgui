@@ -1,5 +1,7 @@
 # (incomplete) Zig Imgui bindings
 Bindings in zig for [Dear ImGui](https://github.com/ocornut/imgui). These are hand written and incomplete for now, while I work on a c++ parser in a side project.
+# michel-z's ZGUI lib
+For a more feature complete and less opinonated bindings, see https://github.com/michal-z/zig-gamedev/tree/main/libs/zgui
 ## Usage
 For complete example, see usage in [zig-imgui-template](https://github.com/dumheter/zig-imgui-template/tree/zimgui).
 ### Backend
