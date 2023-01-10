@@ -255,6 +255,46 @@ extern fn zimgui_sliderFloat([*]const u8, *f32, f32, f32) bool;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+pub fn inputTextMultiline(comptime fmt: []const u8, args: anytype, buf: []u8, size: ?Vec2, flags: InputTextFlags) bool {
+    var size_ = if (size) |s| s else Vec2{.x = 0, .y = 0};
+    var res = formatZ(fmt, args);
+    return zimgui_inputTextMultiline(res.ptr, buf.ptr, buf.len, size_.x, size_.y, @enumToInt(flags));
+}
+extern fn zimgui_inputTextMultiline([*]const u8, [*]u8, usize, f32, f32, u32) callconv(.C) bool;
+
+/// Callback function for ImGui::InputText()
+//const InputTextCallback = fn(data: *InputTextCallbackData) i32;
+//
+//const InputTextCallbackData = struct {
+//    event_flag: InputTextFlags, // One ImGuiInputTextFlags_Callback*    // Read-only
+//    flags: InputTextFlags, // One ImGuiInputTextFlags_Callback*    // Read-only
+//    user_data: *anyopaque, // What user passed to InputText()      // Read-only
+//
+//    // Arguments for the different callback events
+//    // - To modify the text buffer in a callback, prefer using the InsertChars() / DeleteChars() function. InsertChars() will take care of calling the resize callback if necessary.
+//    // - If you know your edits are not going to resize the underlying buffer allocation, you may modify the contents of 'Buf[]' directly. You need to update 'BufTextLen' accordingly (0 <= BufTextLen < BufSize) and set 'BufDirty'' to true so InputText can update its internal state.
+//    event_char: u16;      // Character input                      // Read-write   // [CharFilter] Replace character with another one, or set to zero to drop. return 1 is equivalent to setting EventChar=0;
+//    event_key: GuiKey;       // Key pressed (Up/Down/TAB)            // Read-only    // [Completion,History]
+//    buf: []u8;            // Text buffer                          // Read-write   // [Resize] Can replace pointer / [Completion,History,Always] Only write to pointed data, don't replace the actual pointer!
+//    // buf.len // Text length (in bytes)               // Read-write   // [Resize,Completion,History,Always] Exclude zero-terminator storage. In C land: == strlen(some_text), in C++ land: string.length()
+//    buf_size: u32;        // Buffer size (in bytes) = capacity+1  // Read-only    // [Resize,Completion,History,Always] Include zero-terminator storage. In C land == ARRAYSIZE(my_char_array), in C++ land: string.capacity()+1
+//    buf_dirty: bool;       // Set if you modify Buf/BufTextLen!    // Write        // [Completion,History,Always]
+//    cursor_pos: i32;      //                                      // Read-write   // [Completion,History,Always]
+//    selection_start: i32; //                                      // Read-write   // [Completion,History,Always] == to SelectionEnd when no selection)
+//    selection_end: i32;   //                                      // Read-write   // [Completion,History,Always]
+//
+//    // Helper functions for text manipulation.
+//    // Use those function to benefit from the CallbackResize behaviors. Calling those function reset the selection.
+//    //IMGUI_API ImGuiInputTextCallbackData();
+//    //IMGUI_API void      DeleteChars(int pos, int bytes_count);
+//    //IMGUI_API void      InsertChars(int pos, const char* text, const char* text_end = NULL);
+//    //void                SelectAll()             { SelectionStart = 0; SelectionEnd = BufTextLen; }
+//    //void                ClearSelection()        { SelectionStart = SelectionEnd = BufTextLen; }
+//    //bool                HasSelection() const    { return SelectionStart != SelectionEnd; }
+//}
+
+///////////////////////////////////////////////////////////////////////////////
+
 /// Tables
 /// - Full-featured replacement for old Columns API.
 /// - See Demo->Tables for demo code. See top of imgui_tables.cpp for general commentary.
@@ -784,6 +824,31 @@ const ComboFlags = enum(u32) {
     NoPreview               = 1 << 6,   // Display only a square arrow button
 };
 
+/// Flags for ImGui::InputText()
+const InputTextFlags = enum(u32) {
+    None                = 0,
+    CharsDecimal        = 1 << 0,   // Allow 0123456789.+-*/
+    CharsHexadecimal    = 1 << 1,   // Allow 0123456789ABCDEFabcdef
+    CharsUppercase      = 1 << 2,   // Turn a..z into A..Z
+    CharsNoBlank        = 1 << 3,   // Filter out spaces, tabs
+    AutoSelectAll       = 1 << 4,   // Select entire text when first taking mouse focus
+    EnterReturnsTrue    = 1 << 5,   // Return 'true' when Enter is pressed (as opposed to every time the value was modified). Consider looking at the IsItemDeactivatedAfterEdit() function.
+    CallbackCompletion  = 1 << 6,   // Callback on pressing TAB (for completion handling)
+    CallbackHistory     = 1 << 7,   // Callback on pressing Up/Down arrows (for history handling)
+    CallbackAlways      = 1 << 8,   // Callback on each iteration. User code may query cursor position, modify text buffer.
+    CallbackCharFilter  = 1 << 9,   // Callback on character inputs to replace or discard them. Modify 'EventChar' to replace or discard, or return 1 in callback to discard.
+    AllowTabInput       = 1 << 10,  // Pressing TAB input a '\t' character into the text field
+    CtrlEnterForNewLine = 1 << 11,  // In multi-line mode, unfocus with Enter, add new line with Ctrl+Enter (default is opposite: unfocus with Ctrl+Enter, add line with Enter).
+    NoHorizontalScroll  = 1 << 12,  // Disable following the cursor horizontally
+    AlwaysOverwrite     = 1 << 13,  // Overwrite mode
+    ReadOnly            = 1 << 14,  // Read-only mode
+    Password            = 1 << 15,  // Password mode, display all characters as '*'
+    NoUndoRedo          = 1 << 16,  // Disable undo/redo. Note that input text owns the text data while active, if you want to provide your own undo/redo stack you need e.g. to call ClearActiveID().
+    CharsScientific     = 1 << 17,  // Allow 0123456789.+-*/eE (Scientific notation input)
+    CallbackResize      = 1 << 18,  // Callback on buffer capacity changes request (beyond 'buf_size' parameter value), allowing the string to grow. Notify when the string wants to be resized (for string types which hold a cache of their Size). You will be provided a new BufSize in the callback and NEED to honor it. (see misc/cpp/imgui_stdlib.h for an example of using this)
+    CallbackEdit        = 1 << 19,  // Callback on any edit (note that InputText() already returns true on edit, the callback is useful mainly to manipulate the underlying buffer while focus is active)
+};
+
 // Flags for ImGui::BeginTable()
 // - Important! Sizing policies have complex and subtle side effects, much more so than you would expect.
 //   Read comments/demos carefully + experiment with live demos to get acquainted with them.
@@ -902,6 +967,114 @@ const TableBgTarget = enum(u32) {
     RowBg0                   = 1,        // Set row background color 0 (generally used for background, automatically set when RowBg is used)
     RowBg1                   = 2,        // Set row background color 1 (generally used for selection marking)
     CellBg                   = 3,        // Set cell background color (top-most color)
+};
+
+/// Keys value 0 to 511 are left unused as legacy native/opaque key values (< 1.87)
+/// Keys value >= 512 are named keys (>= 1.87)
+const GuiKey = enum(u32) {
+    // Keyboard
+    None = 0,
+    Tab = 512,             // == NamedKey_BEGIN
+    LeftArrow,
+    RightArrow,
+    UpArrow,
+    DownArrow,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    Insert,
+    Delete,
+    Backspace,
+    Space,
+    Enter,
+    Escape,
+    LeftCtrl, LeftShift, LeftAlt, LeftSuper,
+    RightCtrl, RightShift, RightAlt, RightSuper,
+    Menu,
+    @"0", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9",
+    A, B, C, D, E, F, G, H, I, J,
+    K, L, M, N, O, P, Q, R, S, T,
+    U, V, W, X, Y, Z,
+    F1, F2, F3, F4, F5, F6,
+    F7, F8, F9, F10, F11, F12,
+    Apostrophe,        // '
+    Comma,             // ,
+    Minus,             // -
+    Period,            // .
+    Slash,             // /
+    Semicolon,         // ;
+    Equal,             // =
+    LeftBracket,       // [
+    Backslash,         // \ (this text inhibit multiline comment caused by backslash)
+    RightBracket,      // ]
+    GraveAccent,       // `
+    CapsLock,
+    ScrollLock,
+    NumLock,
+    PrintScreen,
+    Pause,
+    Keypad0, Keypad1, Keypad2, Keypad3, Keypad4,
+    Keypad5, Keypad6, Keypad7, Keypad8, Keypad9,
+    KeypadDecimal,
+    KeypadDivide,
+    KeypadMultiply,
+    KeypadSubtract,
+    KeypadAdd,
+    KeypadEnter,
+    KeypadEqual,
+
+    // Gamepad (some of those are analog values, 0.0f to 1.0f)                          // GAME NAVIGATION ACTION
+    // (download controller mapping PNG/PSD at http://dearimgui.org/controls_sheets)
+    GamepadStart,          // Menu (Xbox)      + (Switch)   Start/Options (PS)
+    GamepadBack,           // View (Xbox)      - (Switch)   Share (PS)
+    GamepadFaceLeft,       // X (Xbox)         Y (Switch)   Square (PS)        // Tap: Toggle Menu. Hold: Windowing mode (Focus/Move/Resize windows)
+    GamepadFaceRight,      // B (Xbox)         A (Switch)   Circle (PS)        // Cancel / Close / Exit
+    GamepadFaceUp,         // Y (Xbox)         X (Switch)   Triangle (PS)      // Text Input / On-screen Keyboard
+    GamepadFaceDown,       // A (Xbox)         B (Switch)   Cross (PS)         // Activate / Open / Toggle / Tweak
+    GamepadDpadLeft,       // D-pad Left                                       // Move / Tweak / Resize Window (in Windowing mode)
+    GamepadDpadRight,      // D-pad Right                                      // Move / Tweak / Resize Window (in Windowing mode)
+    GamepadDpadUp,         // D-pad Up                                         // Move / Tweak / Resize Window (in Windowing mode)
+    GamepadDpadDown,       // D-pad Down                                       // Move / Tweak / Resize Window (in Windowing mode)
+    GamepadL1,             // L Bumper (Xbox)  L (Switch)   L1 (PS)            // Tweak Slower / Focus Previous (in Windowing mode)
+    GamepadR1,             // R Bumper (Xbox)  R (Switch)   R1 (PS)            // Tweak Faster / Focus Next (in Windowing mode)
+    GamepadL2,             // L Trig. (Xbox)   ZL (Switch)  L2 (PS) [Analog]
+    GamepadR2,             // R Trig. (Xbox)   ZR (Switch)  R2 (PS) [Analog]
+    GamepadL3,             // L Stick (Xbox)   L3 (Switch)  L3 (PS)
+    GamepadR3,             // R Stick (Xbox)   R3 (Switch)  R3 (PS)
+    GamepadLStickLeft,     // [Analog]                                         // Move Window (in Windowing mode)
+    GamepadLStickRight,    // [Analog]                                         // Move Window (in Windowing mode)
+    GamepadLStickUp,       // [Analog]                                         // Move Window (in Windowing mode)
+    GamepadLStickDown,     // [Analog]                                         // Move Window (in Windowing mode)
+    GamepadRStickLeft,     // [Analog]
+    GamepadRStickRight,    // [Analog]
+    GamepadRStickUp,       // [Analog]
+    GamepadRStickDown,     // [Analog]
+
+    // Keyboard Modifiers (explicitly submitted by backend via AddKeyEvent() calls)
+    // - This is mirroring the data also written to io.KeyCtrl, io.KeyShift, io.KeyAlt, io.KeySuper, in a format allowing
+    //   them to be accessed via standard key API, allowing calls such as IsKeyPressed(), IsKeyReleased(), querying duration etc.
+    // - Code polling every keys (e.g. an interface to detect a key press for input mapping) might want to ignore those
+    //   and prefer using the real keys (e.g. LeftCtrl, RightCtrl instead of ModCtrl).
+    // - In theory the value of keyboard modifiers should be roughly equivalent to a logical or of the equivalent left/right keys.
+    //   In practice: it's complicated; mods are often provided from different sources. Keyboard layout, IME, sticky keys and
+    //   backends tend to interfere and break that equivalence. The safer decision is to relay that ambiguity down to the end-user...
+    ModCtrl, ModShift, ModAlt, ModSuper,
+
+    // Mouse Buttons (auto-submitted from AddMouseButtonEvent() calls)
+    // - This is mirroring the data also written to io.MouseDown[], io.MouseWheel, in a format allowing them to be accessed via standard key API.
+    MouseLeft, MouseRight, MouseMiddle, MouseX1, MouseX2, MouseWheelX, MouseWheelY,
+
+    // End of list
+    COUNT,                 // No valid ImGuiKey is ever greater than this value
+
+    // [Internal] Prior to 1.87 we required user to fill io.KeysDown[512] using their own native index + a io.KeyMap[] array.
+    // We are ditching this method but keeping a legacy path for user code doing e.g. IsKeyPressed(MY_NATIVE_KEY_CODE)
+    NamedKey_BEGIN         = 512,
+    //NamedKey_END           = COUNT,
+    //NamedKey_COUNT         = NamedKey_END - NamedKey_BEGIN,
+    //KeysData_SIZE          = COUNT,                   // Size of KeysData[]: hold legacy 0..512 keycodes + named keys
+    //KeysData_OFFSET        = 0,                                // First key stored in io.KeysData[0]. Accesses to io.KeysData[] must use (key - KeysData_OFFSET).
 };
 
 ///////////////////////////////////////////////////////////////////////////////
