@@ -195,7 +195,7 @@ ZIMGUI_API bool zimgui_inputTextMultiline(const char* label, char* buf, size_t b
 
 ZIMGUI_API bool zimgui_beginTable(const char* label, int column, uint flags, float x, float y, float inner_width)
 {
-  ImGui::BeginTable(label, column, flags, {x, y}, inner_width);
+  return ImGui::BeginTable(label, column, flags, {x, y}, inner_width);
 }
 
 ZIMGUI_API void zimgui_endTable()
