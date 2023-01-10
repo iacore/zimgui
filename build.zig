@@ -4,9 +4,9 @@ const std = @import("std");
 pub const BuildOptions = struct {
     build_mode: ?std.builtin.Mode = null,
     target: ?std.zig.CrossTarget = null,
-    impl_opengl3: bool = false,
-    disable_obsolete_keyio: bool = false,
-    disable_obsolete_functions: bool = false,
+    impl_opengl3: bool = true,
+    disable_obsolete_keyio: bool = true,
+    disable_obsolete_functions: bool = true,
 };
 
 /// Build and link zig imgui bindings.

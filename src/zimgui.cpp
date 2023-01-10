@@ -147,7 +147,7 @@ ZIMGUI_API bool zimgui_imageButton(ImTextureID texture_id, float x, float y, flo
 // TODO: add bg_color and tint_color
 ZIMGUI_API bool zimgui_ext_imageButtonEx(ImGuiID im_id, ImTextureID texture_id, float x, float y, float uv0x, float uv0y, float uv1x, float uv1y)
 {
-	return ImGui::ImageButtonEx(im_id, texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y}, {0, 0, 0, 0}, {1, 1, 1, 1});
+  return ImGui::ImageButtonEx(im_id, texture_id, {x, y}, {uv0x, uv0y}, {uv1x, uv1y}, {1, 1}, {0, 0, 0, 0}, {1, 1, 1, 1});
 }
 
 ///////////////////////////////////////////////////////////////////////////////
