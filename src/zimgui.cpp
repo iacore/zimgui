@@ -181,6 +181,11 @@ ZIMGUI_API bool zimgui_sliderFloat(const char* label, float* v, float min, float
 
 ///////////////////////////////////////////////////////////////////////////////
 
+ZIMGUI_API bool zimgui_inputText(const char* label, char* buf, size_t buf_size, uint flags)
+{
+  return ImGui::InputText(label, buf, buf_size, flags);
+}
+
 ZIMGUI_API bool zimgui_inputTextMultiline(const char* label, char* buf, size_t buf_size, float x, float y, uint flags)
 {
   return ImGui::InputTextMultiline(label, buf, buf_size, {x, y}, flags);

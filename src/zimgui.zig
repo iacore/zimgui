@@ -255,12 +255,18 @@ extern fn zimgui_sliderFloat([*]const u8, *f32, f32, f32) bool;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+pub fn inputText(comptime fmt: []const u8, args: anytype, buf: []u8, flags: InputTextFlags) bool {
+    var res = formatZ(fmt, args);
+    return zimgui_inputText(res.ptr, buf.ptr, buf.len, @enumToInt(flags));
+}
+extern fn zimgui_inputText([*]const u8, [*]u8, usize, u32) bool;
+
 pub fn inputTextMultiline(comptime fmt: []const u8, args: anytype, buf: []u8, size: ?Vec2, flags: InputTextFlags) bool {
     var size_ = if (size) |s| s else Vec2{.x = 0, .y = 0};
     var res = formatZ(fmt, args);
     return zimgui_inputTextMultiline(res.ptr, buf.ptr, buf.len, size_.x, size_.y, @enumToInt(flags));
 }
-extern fn zimgui_inputTextMultiline([*]const u8, [*]u8, usize, f32, f32, u32) callconv(.C) bool;
+extern fn zimgui_inputTextMultiline([*]const u8, [*]u8, usize, f32, f32, u32) bool;
 
 /// Callback function for ImGui::InputText()
 //const InputTextCallback = fn(data: *InputTextCallbackData) i32;
