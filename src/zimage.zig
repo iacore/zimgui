@@ -1,6 +1,5 @@
 // zig bindings for stb_image
 
-
 // DOCUMENTATION
 //
 // Limitations:
@@ -102,7 +101,7 @@ extern fn zimage_free([*]u8) void;
 
 const std = @import("std");
 
-gpa: std.heap.GeneralPurposeAllocator(.{.thread_safe = true}) = std.heap.GeneralPurposeAllocator(.{.thread_safe = true}){},
+gpa: std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }) = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){},
 const Self = @This();
 
 fn zimgui_malloc(size: usize) callconv(.C) *u8 {
