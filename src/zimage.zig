@@ -93,6 +93,20 @@ pub fn load(filename: [:0]const u8, x: *i32, y: *i32, channels_in_file: *i32, de
 }
 extern fn zimage_load([*]const u8, *i32, *i32, *i32, i32, *[*]u8) bool;
 
+pub fn load_from_memory(data: []const u8, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) ?[]u8 {
+    var ptr: [*]u8 = undefined;
+    if (zimage_load_from_memory(data.ptr, data.len, x, y, channels_in_file, desired_channels, &ptr)) {
+        if (x.* <= 0 and y.* <= 0) return null;
+        var pixels = @intCast(usize, x.*) * @intCast(usize, y.*);
+        var bytes = if (desired_channels == 0) @intCast(usize, channels_in_file.*) else @intCast(usize, desired_channels);
+        var len = pixels * bytes;
+        var slice: []u8 = ptr[0..len];
+        return slice;
+    }
+    return null;
+}
+extern fn zimage_load_from_memory([*]const u8, usize, *i32, *i32, *i32, i32, *[*]u8) bool;
+
 pub fn free(returned_slice_from_load: []u8) void {
     zimage_free(returned_slice_from_load.ptr);
 }

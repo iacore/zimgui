@@ -529,6 +529,11 @@ pub const FontAtlas = *opaque{
     }
     extern fn zimgui_FontAtlas_addFontFromFileTTF(font_atlas: FontAtlas, filename: [*:0]const u8, size_pixels: f32) void;
 
+    pub fn addFontFromMemoryTTF(font_atlas: FontAtlas, font_data: []const u8, size_pixels: f32) void {
+        zimgui_FontAtlas_addFontFromMemoryTTF(font_atlas, font_data.ptr, font_data.len, size_pixels);
+    }
+    extern fn zimgui_FontAtlas_addFontFromMemoryTTF(font_atlas: FontAtlas, font_data: [*]const u8, font_data_size: usize, size_pixels: f32) void;
+
     pub fn build(font_atlas: FontAtlas) bool {
         return zimgui_FontAtlas_build(font_atlas);
     }

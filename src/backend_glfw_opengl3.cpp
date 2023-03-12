@@ -160,7 +160,7 @@ ZIMGUI_API void zimgui_glEnable(int cap)
   glEnable(cap);
 }
 
-ZIMGUI_API void zimgui_gladLoadGLLoader(GLADloadproc fn)
+ZIMGUI_API int zimgui_gladLoadGLLoader(GLADloadproc fn)
 {
-  gladLoadGLLoader(fn);
+  return gladLoadGLLoader(fn);
 }

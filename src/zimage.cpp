@@ -18,6 +18,12 @@ ZIMAGE_API bool zimage_load(const char* filename, int* x, int* y, int* channels_
   return out != NULL;
 }
 
+ZIMAGE_API bool zimage_load_from_memory(const unsigned char* data, size_t data_len, int* x, int* y, int* channels_in_file, int desired_channels, unsigned char** out)
+{
+  *out = stbi_load_from_memory(data, data_len, x, y, channels_in_file, desired_channels);
+  return out != NULL;
+}
+
 ZIMAGE_API void zimage_free(unsigned char* returned_slice_from_load)
 {
   stbi_image_free(returned_slice_from_load);

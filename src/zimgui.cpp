@@ -370,6 +370,13 @@ ZIMGUI_API void zimgui_FontAtlas_addFontFromFileTTF(ImFontAtlas* font_atlas, con
   font_atlas->AddFontFromFileTTF(filename, size_pixels);
 }
 
+ZIMGUI_API void zimgui_FontAtlas_addFontFromMemoryTTF(ImFontAtlas* font_atlas, void* font_data, size_t font_data_size, float size_pixels)
+{
+  ImFontConfig config;
+  config.FontDataOwnedByAtlas = false;
+  font_atlas->AddFontFromMemoryTTF(font_data, font_data_size, size_pixels, &config);
+}
+
 ZIMGUI_API bool zimgui_FontAtlas_build(ImFontAtlas* font_atlas)
 {
   return font_atlas->Build();
