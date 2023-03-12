@@ -191,6 +191,11 @@ ZIMGUI_API bool zimgui_inputTextMultiline(const char* label, char* buf, size_t b
   return ImGui::InputTextMultiline(label, buf, buf_size, {x, y}, flags);
 }
 
+ZIMGUI_API bool zimgui_inputTextWithHint(const char* label, const char* hint, char* buf, size_t bufsize, uint flags)
+{
+  return ImGui::InputTextWithHint(label, hint, buf, bufsize, flags);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 ZIMGUI_API bool zimgui_beginTable(const char* label, int column, uint flags, float x, float y, float inner_width)

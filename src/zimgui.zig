@@ -186,22 +186,22 @@ pub fn button(comptime fmt: []const u8, args: anytype, size: ?Vec2) bool {
 extern fn zimgui_button([*:0]const u8, f32, f32) bool;
 
 pub fn image(textureId: u32, size: Vec2, uv0: ?Vec2, uv1: ?Vec2) void {
-    var uv0_: Vec2 = if (uv0) |uv0u| uv0u else Vec2{.x=0, .y=0};
-    var uv1_: Vec2 = if (uv1) |uv1u| uv1u else Vec2{.x=1, .y=1};
+    var uv0_: Vec2 = if (uv0) |uv0u| uv0u else Vec2{ .x = 0, .y = 0 };
+    var uv1_: Vec2 = if (uv1) |uv1u| uv1u else Vec2{ .x = 1, .y = 1 };
     zimgui_image(textureId, size.x, size.y, uv0_.x, uv0_.y, uv1_.x, uv1_.y);
 }
 extern fn zimgui_image(u32, f32, f32, f32, f32, f32, f32) void;
 
 pub fn imageButton(textureId: u32, size: Vec2, uv0: ?Vec2, uv1: ?Vec2) bool {
-    var uv0_: Vec2 = if (uv0) |uv0u| uv0u else Vec2{.x=0, .y=0};
-    var uv1_: Vec2 = if (uv1) |uv1u| uv1u else Vec2{.x=1, .y=1};
+    var uv0_: Vec2 = if (uv0) |uv0u| uv0u else Vec2{ .x = 0, .y = 0 };
+    var uv1_: Vec2 = if (uv1) |uv1u| uv1u else Vec2{ .x = 1, .y = 1 };
     return zimgui_imageButton(textureId, size.x, size.y, uv0_.x, uv0_.y, uv1_.x, uv1_.y);
 }
 extern fn zimgui_imageButton(u32, f32, f32, f32, f32, f32, f32) bool;
 
 pub fn imageButtonEx(im_id: u32, texture_id: u32, size: Vec2, uv0: ?Vec2, uv1: ?Vec2) bool {
-    var uv0_: Vec2 = if (uv0) |uv0u| uv0u else Vec2{.x=0, .y=0};
-    var uv1_: Vec2 = if (uv1) |uv1u| uv1u else Vec2{.x=1, .y=1};
+    var uv0_: Vec2 = if (uv0) |uv0u| uv0u else Vec2{ .x = 0, .y = 0 };
+    var uv1_: Vec2 = if (uv1) |uv1u| uv1u else Vec2{ .x = 1, .y = 1 };
     return zimgui_ext_imageButtonEx(im_id, texture_id, size.x, size.y, uv0_.x, uv0_.y, uv1_.x, uv1_.y);
 }
 extern fn zimgui_ext_imageButtonEx(u32, u32, f32, f32, f32, f32, f32, f32) bool;
@@ -262,11 +262,22 @@ pub fn inputText(comptime fmt: []const u8, args: anytype, buf: []u8, flags: Inpu
 extern fn zimgui_inputText([*]const u8, [*]u8, usize, u32) bool;
 
 pub fn inputTextMultiline(comptime fmt: []const u8, args: anytype, buf: []u8, size: ?Vec2, flags: InputTextFlags) bool {
-    var size_ = if (size) |s| s else Vec2{.x = 0, .y = 0};
+    var size_ = if (size) |s| s else Vec2{ .x = 0, .y = 0 };
     var res = formatZ(fmt, args);
     return zimgui_inputTextMultiline(res.ptr, buf.ptr, buf.len, size_.x, size_.y, @enumToInt(flags));
 }
 extern fn zimgui_inputTextMultiline([*]const u8, [*]u8, usize, f32, f32, u32) bool;
+
+pub fn inputTextWithHint(comptime label: []const u8, label_args: anytype, comptime hint: []const u8, hint_args: anytype, buf: []u8, flags: InputTextFlags) bool {
+    var label_buf: [1024]u8 = undefined;
+    var res = formatZ(label, label_args);
+    var label_z = copyZ(&label_buf, res);
+
+    var hint_z = formatZ(hint, hint_args);
+
+    return zimgui_inputTextWithHint(label_z.ptr, hint_z.ptr, buf.ptr, buf.len, @enumToInt(flags));
+}
+extern fn zimgui_inputTextWithHint([*]const u8, [*]const u8, [*]const u8, usize, u32) bool;
 
 /// Callback function for ImGui::InputText()
 //const InputTextCallback = fn(data: *InputTextCallbackData) i32;
@@ -384,11 +395,9 @@ extern fn zimgui_tableHeadersRow() void;
 ///  - You can bypass the hovering restriction by using ImGuiHoveredFlags_AllowWhenBlockedByPopup when calling IsItemHovered() or IsWindowHovered().
 ///  - IMPORTANT: Popup identifiers are relative to the current ID stack, so OpenPopup and BeginPopup generally needs to be at the same level of the stack.
 ///    This is sometimes leading to confusing mistakes. May rework this in the future.
-
 /// Popups: begin/end functions
 ///  - BeginPopup(): query popup state, if open start appending into the window. Call EndPopup() afterwards. ImGuiWindowFlags are forwarded to the window.
 ///  - BeginPopupModal(): block every interactions behind the window, cannot be closed by user, add a dimming background, has a title bar.
-
 /// return true if the popup is open, and you can start outputting to it.
 pub fn beginPopup(str_id: []const u8, flags: WindowFlags) bool {
     var buf: [1024]u8 = undefined;
@@ -411,7 +420,6 @@ extern fn zimgui_endPopup() void;
 ///  - Use ImGuiPopupFlags_NoOpenOverExistingPopup to avoid opening a popup if there's already one at the same level. This is equivalent to e.g. testing for !IsAnyPopupOpen() prior to OpenPopup().
 ///  - Use IsWindowAppearing() after BeginPopup() to tell if a window just opened.
 ///  - IMPORTANT: Notice that for OpenPopupOnItemClick() we exceptionally default flags to 1 (== ImGuiPopupFlags_MouseButtonRight) for backward compatibility with older API taking 'int mouse_button = 1' parameter
-
 /// call to mark popup as open (don't call every frame!).
 pub fn openPopup(str_id: []const u8, flags: PopupFlags) void {
     var buf: [1024]u8 = undefined;
@@ -447,7 +455,7 @@ pub fn colorF32ToU8(in: f32) u8 {
 // Structs
 //
 
-pub const Context = *opaque{
+pub const Context = *opaque {
     pub fn getIo(context: Context) Io {
         return zimgui_Context_getIo(context);
     }
@@ -482,7 +490,7 @@ pub const Context = *opaque{
     extern fn zimgui_Ext_addText(Context, f32, f32, f32, [*]const u8, usize, f32, ?*const f32, ?*const f32, ?*const f32, ?*const f32, [*]const u32, usize) void;
 
     pub fn Ext_calcBbForCharInText(context: Context, font_size: f32, pos: Vec2, txt: []const u8, wrap_width: f32, char_index: usize) ?Rect {
-        var out = Rect{.min = Vec2{.x = -1, .y = -1}, .max = Vec2{.x = -1, .y = -1}};
+        var out = Rect{ .min = Vec2{ .x = -1, .y = -1 }, .max = Vec2{ .x = -1, .y = -1 } };
         zimgui_Ext_calcBbForCharInText(context, font_size, pos.x, pos.y, txt.ptr, txt.len, wrap_width, char_index, &out.min.x, &out.min.y, &out.max.x, &out.max.y);
         if (out.min.x == -1 or out.min.y == -1 or out.max.x == -1 or out.max.y == -1) {
             return null;
@@ -492,7 +500,7 @@ pub const Context = *opaque{
     extern fn zimgui_Ext_calcBbForCharInText(Context, f32, f32, f32, [*]const u8, usize, f32, usize, *f32, *f32, *f32, *f32) void;
 };
 
-pub const Font = *opaque{
+pub const Font = *opaque {
     pub fn getFallbackAdvanceX(font: Font) f32 {
         return zimgui_Font_getFallbackAdvanceX(font);
     }
@@ -504,9 +512,9 @@ pub const Font = *opaque{
     extern fn zimgui_Font_getFontSize(Font) f32;
 };
 
-pub const DrawData = *opaque{};
+pub const DrawData = *opaque {};
 
-pub const Io = *opaque{
+pub const Io = *opaque {
     pub fn getFontAtlas(io: Io) FontAtlas {
         return zimgui_Io_getFontAtlas(io);
     }
@@ -518,7 +526,7 @@ pub const Io = *opaque{
     extern fn zimgui_Io_setDisplaySize(Io, f32, f32) void;
 };
 
-pub const FontAtlas = *opaque{
+pub const FontAtlas = *opaque {
     pub fn getTexDataAsRGBA32(font_atlas: FontAtlas, text_pixels: *[*:0]u8, text_w: *i32, text_h: *i32, bytes_per_pixel: *i32) void {
         zimgui_FontAtlas_getTexDataAsRGBA32(font_atlas, text_pixels, text_w, text_h, bytes_per_pixel);
     }
@@ -540,7 +548,7 @@ pub const FontAtlas = *opaque{
     extern fn zimgui_FontAtlas_build(FontAtlas) bool;
 };
 
-pub const Style = *opaque{
+pub const Style = *opaque {
     pub fn setColor(style: Style, style_col: StyleCol, color: Vec4) void {
         zimgui_Style_setColor(style, @enumToInt(style_col), color.x, color.y, color.z, color.w);
     }
@@ -578,7 +586,7 @@ pub const Style = *opaque{
     extern fn zimgui_Style_getItemInnerSpacing(Style, *f32, *f32) void;
 };
 
-pub const Window = *opaque{
+pub const Window = *opaque {
     pub fn getDrawList(window: Window) DrawList {
         return zimgui_Window_getDrawList(window);
     }
@@ -599,7 +607,7 @@ pub const Window = *opaque{
     extern fn zimgui_Window_getSize(Window, *f32, *f32) void;
 };
 
-pub const DrawList = *opaque{
+pub const DrawList = *opaque {
     // Primitives
     // - Filled shapes must always use clockwise winding order. The anti-aliasing fringe depends on it. Counter-clockwise shapes will have "inward" anti-aliasing.
     // - For rectangular primitives, "p_min" and "p_max" represent the upper-left and lower-right corners.
@@ -674,31 +682,31 @@ pub const col32_a_mask = 0xFF000000;
 
 /// Flags for ImGui::Begin()
 pub const WindowFlags = packed struct {
-    NoTitleBar: bool = false,   // Disable title-bar
-    NoResize: bool = false,   // Disable user resizing with the lower-right grip
-    NoMove: bool = false,   // Disable user moving the window
-    NoScrollbar: bool = false,   // Disable scrollbars (window can still scroll with mouse or programmatically)
-    NoScrollWithMouse: bool = false,   // Disable user vertically scrolling with mouse wheel. On child window, mouse wheel will be forwarded to the parent unless NoScrollbar is also set.
-    NoCollapse: bool = false,   // Disable user collapsing window by double-clicking on it. Also referred to as Window Menu Button (e.g. within a docking node).
-    AlwaysAutoResize: bool = false,   // Resize every window to its content every frame
-    NoBackground: bool = false,   // Disable drawing background color (WindowBg, etc.) and outside border. Similar as using SetNextWindowBgAlpha(0.0f).
-    NoSavedSettings: bool = false,   // Never load/save settings in .ini file
-    NoMouseInputs: bool = false,   // Disable catching mouse, hovering test with pass through.
-    MenuBar: bool = false,  // Has a menu-bar
-    HorizontalScrollbar: bool = false,  // Allow horizontal scrollbar to appear (off by default). You may use SetNextWindowContentSize(ImVec2(width,0.0f)); prior to calling Begin() to specify width. Read code in imgui_demo in the "Horizontal Scrolling" section.
-    NoFocusOnAppearing: bool = false,  // Disable taking focus when transitioning from hidden to visible state
-    NoBringToFrontOnFocus: bool = false,  // Disable bringing window to front when taking focus (e.g. clicking on it or programmatically giving it focus)
-    AlwaysVerticalScrollbar: bool = false,  // Always show vertical scrollbar (even if ContentSize.y < Size.y)
-    AlwaysHorizontalScrollbar: bool = false,  // Always show horizontal scrollbar (even if ContentSize.x < Size.x)
-    AlwaysUseWindowPadding: bool = false,  // Ensure child windows without border uses style.WindowPadding (ignored by default for non-bordered child windows, because more convenient)
-    NoNavInputs: bool = false,  // No gamepad/keyboard navigation within the window
-    NoNavFocus: bool = false,  // No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
-    UnsavedDocument: bool = false,  // Display a dot next to the title. When used in a tab/docking context, tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
+    NoTitleBar: bool = false, // Disable title-bar
+    NoResize: bool = false, // Disable user resizing with the lower-right grip
+    NoMove: bool = false, // Disable user moving the window
+    NoScrollbar: bool = false, // Disable scrollbars (window can still scroll with mouse or programmatically)
+    NoScrollWithMouse: bool = false, // Disable user vertically scrolling with mouse wheel. On child window, mouse wheel will be forwarded to the parent unless NoScrollbar is also set.
+    NoCollapse: bool = false, // Disable user collapsing window by double-clicking on it. Also referred to as Window Menu Button (e.g. within a docking node).
+    AlwaysAutoResize: bool = false, // Resize every window to its content every frame
+    NoBackground: bool = false, // Disable drawing background color (WindowBg, etc.) and outside border. Similar as using SetNextWindowBgAlpha(0.0f).
+    NoSavedSettings: bool = false, // Never load/save settings in .ini file
+    NoMouseInputs: bool = false, // Disable catching mouse, hovering test with pass through.
+    MenuBar: bool = false, // Has a menu-bar
+    HorizontalScrollbar: bool = false, // Allow horizontal scrollbar to appear (off by default). You may use SetNextWindowContentSize(ImVec2(width,0.0f)); prior to calling Begin() to specify width. Read code in imgui_demo in the "Horizontal Scrolling" section.
+    NoFocusOnAppearing: bool = false, // Disable taking focus when transitioning from hidden to visible state
+    NoBringToFrontOnFocus: bool = false, // Disable bringing window to front when taking focus (e.g. clicking on it or programmatically giving it focus)
+    AlwaysVerticalScrollbar: bool = false, // Always show vertical scrollbar (even if ContentSize.y < Size.y)
+    AlwaysHorizontalScrollbar: bool = false, // Always show horizontal scrollbar (even if ContentSize.x < Size.x)
+    AlwaysUseWindowPadding: bool = false, // Ensure child windows without border uses style.WindowPadding (ignored by default for non-bordered child windows, because more convenient)
+    NoNavInputs: bool = false, // No gamepad/keyboard navigation within the window
+    NoNavFocus: bool = false, // No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
+    UnsavedDocument: bool = false, // Display a dot next to the title. When used in a tab/docking context, tab is selected when clicking the X + closure is not assumed (will wait for user to stop submitting the tab). Otherwise closure is assumed when pressing the X, so if you keep submitting the tab may reappear at end of tab bar.
     _padding: u12 = 0,
 
-    pub const NoNav = WindowFlags{.NoNavInputs = true, .NoNavFocus = true};
-    pub const NoDecoration = WindowFlags{.NoTitleBar = true, .NoResize = true, .NoScrollbar = true, .NoCollapse = true};
-    pub const NoInputs = WindowFlags{.NoMouseInputs = true, .NoNavInputs = true, .NoNavFocus= true};
+    pub const NoNav = WindowFlags{ .NoNavInputs = true, .NoNavFocus = true };
+    pub const NoDecoration = WindowFlags{ .NoTitleBar = true, .NoResize = true, .NoScrollbar = true, .NoCollapse = true };
+    pub const NoInputs = WindowFlags{ .NoMouseInputs = true, .NoNavInputs = true, .NoNavFocus = true };
 
     comptime {
         assert(@sizeOf(@This()) == @sizeOf(u32) and @bitSizeOf(@This()) == @bitSizeOf(u32));
@@ -706,23 +714,23 @@ pub const WindowFlags = packed struct {
 };
 
 pub const GuiCond = enum(u32) {
-        None          = 0,        // No condition (always set the variable), same as _Always
-        Always        = 1 << 0,   // No condition (always set the variable)
-        Once          = 1 << 1,   // Set the variable once per runtime session (only the first call will succeed)
-        FirstUseEver  = 1 << 2,   // Set the variable if the object/window has no persistently saved data (no entry in .ini file)
-        Appearing     = 1 << 3,   // Set the variable if the object/window is appearing after being hidden/inactive (or the first time)
+    None = 0, // No condition (always set the variable), same as _Always
+    Always = 1 << 0, // No condition (always set the variable)
+    Once = 1 << 1, // Set the variable once per runtime session (only the first call will succeed)
+    FirstUseEver = 1 << 2, // Set the variable if the object/window has no persistently saved data (no entry in .ini file)
+    Appearing = 1 << 3, // Set the variable if the object/window is appearing after being hidden/inactive (or the first time)
 };
 
 /// Enumeration for PushStyleColor() / PopStyleColor()
 pub const StyleCol = enum(u32) {
     Text,
     TextDisabled,
-    WindowBg,              // Background of normal windows
-    ChildBg,               // Background of child windows
-    PopupBg,               // Background of popups, menus, tooltips windows
+    WindowBg, // Background of normal windows
+    ChildBg, // Background of child windows
+    PopupBg, // Background of popups, menus, tooltips windows
     Border,
     BorderShadow,
-    FrameBg,               // Background of checkbox, radio button, plot, slider, text input
+    FrameBg, // Background of checkbox, radio button, plot, slider, text input
     FrameBgHovered,
     FrameBgActive,
     TitleBg,
@@ -739,16 +747,16 @@ pub const StyleCol = enum(u32) {
     Button,
     ButtonHovered,
     ButtonActive,
-    Header,                // Header* colors are used for CollapsingHeader, TreeNode, Selectable, MenuItem
+    Header, // Header* colors are used for CollapsingHeader, TreeNode, Selectable, MenuItem
     HeaderHovered,
     HeaderActive,
     Separator,
     SeparatorHovered,
     SeparatorActive,
-    ResizeGrip,            // Resize grip in lower-right and lower-left corners of windows.
+    ResizeGrip, // Resize grip in lower-right and lower-left corners of windows.
     ResizeGripHovered,
     ResizeGripActive,
-    Tab,                   // TabItem in a TabBar
+    Tab, // TabItem in a TabBar
     TabHovered,
     TabActive,
     TabUnfocused,
@@ -757,39 +765,39 @@ pub const StyleCol = enum(u32) {
     PlotLinesHovered,
     PlotHistogram,
     PlotHistogramHovered,
-    TableHeaderBg,         // Table header background
-    TableBorderStrong,     // Table outer and header borders (prefer using Alpha=1.0 here)
-    TableBorderLight,      // Table inner borders (prefer using Alpha=1.0 here)
-    TableRowBg,            // Table row background (even rows)
-    TableRowBgAlt,         // Table row background (odd rows)
+    TableHeaderBg, // Table header background
+    TableBorderStrong, // Table outer and header borders (prefer using Alpha=1.0 here)
+    TableBorderLight, // Table inner borders (prefer using Alpha=1.0 here)
+    TableRowBg, // Table row background (even rows)
+    TableRowBgAlt, // Table row background (odd rows)
     TextSelectedBg,
-    DragDropTarget,        // Rectangle highlighting a drop target
-    NavHighlight,          // Gamepad/keyboard: current highlighted item
+    DragDropTarget, // Rectangle highlighting a drop target
+    NavHighlight, // Gamepad/keyboard: current highlighted item
     NavWindowingHighlight, // Highlight window when using CTRL+TAB
-    NavWindowingDimBg,     // Darken/colorize entire screen behind the CTRL+TAB window list, when active
-    ModalWindowDimBg,      // Darken/colorize entire screen behind a modal window, when one is active
+    NavWindowingDimBg, // Darken/colorize entire screen behind the CTRL+TAB window list, when active
+    ModalWindowDimBg, // Darken/colorize entire screen behind a modal window, when one is active
     COUNT,
 };
 
 /// Flags for ImDrawList functions
 /// (Legacy: bit 0 must always correspond to ImDrawFlags_Closed to be backward compatible with old API using a bool. Bits 1..3 must be unused)
 pub const DrawFlags = enum(u32) {
-    None                        = 0,
-    Closed                      = 1 << 0, // PathStroke(), AddPolyline(): specify that shape should be closed (Important: this is always == 1 for legacy reason)
-    RoundCornersTopLeft         = 1 << 4, // AddRect(), AddRectFilled(), PathRect(): enable rounding top-left corner only (when rounding > 0.0f, we default to all corners). Was 0x01.
-    RoundCornersTopRight        = 1 << 5, // AddRect(), AddRectFilled(), PathRect(): enable rounding top-right corner only (when rounding > 0.0f, we default to all corners). Was 0x02.
-    RoundCornersBottomLeft      = 1 << 6, // AddRect(), AddRectFilled(), PathRect(): enable rounding bottom-left corner only (when rounding > 0.0f, we default to all corners). Was 0x04.
-    RoundCornersBottomRight     = 1 << 7, // AddRect(), AddRectFilled(), PathRect(): enable rounding bottom-right corner only (when rounding > 0.0f, we default to all corners). Wax 0x08.
-    RoundCornersNone            = 1 << 8, // AddRect(), AddRectFilled(), PathRect(): disable rounding on all corners (when rounding > 0.0f). This is NOT zero, NOT an implicit flag!
-    RoundCornersTop             = 1 << 4 | 1 << 5,
-    RoundCornersBottom          = 1 << 6 | 1 << 7,
-    RoundCornersLeft            = 1 << 6 | 1 << 4,
-    RoundCornersRight           = 1 << 7 | 1 << 5,
-    RoundCornersAll             = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7,
+    None = 0,
+    Closed = 1 << 0, // PathStroke(), AddPolyline(): specify that shape should be closed (Important: this is always == 1 for legacy reason)
+    RoundCornersTopLeft = 1 << 4, // AddRect(), AddRectFilled(), PathRect(): enable rounding top-left corner only (when rounding > 0.0f, we default to all corners). Was 0x01.
+    RoundCornersTopRight = 1 << 5, // AddRect(), AddRectFilled(), PathRect(): enable rounding top-right corner only (when rounding > 0.0f, we default to all corners). Was 0x02.
+    RoundCornersBottomLeft = 1 << 6, // AddRect(), AddRectFilled(), PathRect(): enable rounding bottom-left corner only (when rounding > 0.0f, we default to all corners). Was 0x04.
+    RoundCornersBottomRight = 1 << 7, // AddRect(), AddRectFilled(), PathRect(): enable rounding bottom-right corner only (when rounding > 0.0f, we default to all corners). Wax 0x08.
+    RoundCornersNone = 1 << 8, // AddRect(), AddRectFilled(), PathRect(): disable rounding on all corners (when rounding > 0.0f). This is NOT zero, NOT an implicit flag!
+    RoundCornersTop = 1 << 4 | 1 << 5,
+    RoundCornersBottom = 1 << 6 | 1 << 7,
+    RoundCornersLeft = 1 << 6 | 1 << 4,
+    RoundCornersRight = 1 << 7 | 1 << 5,
+    RoundCornersAll = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7,
 
     // NOTE cannot have same value as other enum in zig
     //RoundCornersDefault_        = RoundCornersAll, // Default to ALL corners if none of the _RoundCornersXX flags are specified.
-    RoundCornersMask_           = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7 | 1 << 8,
+    RoundCornersMask_ = 1 << 4 | 1 << 5 | 1 << 6 | 1 << 7 | 1 << 8,
 };
 
 /// Flags for OpenPopup*(), BeginPopupContext*(), IsPopupOpen() functions.
@@ -801,63 +809,63 @@ pub const DrawFlags = enum(u32) {
 ///   and want to another another flag, you need to pass in the ImGuiPopupFlags_MouseButtonRight flag.
 /// - Multiple buttons currently cannot be combined/or-ed in those functions (we could allow it later).
 const PopupFlags = enum(u32) {
-    MouseButtonLeft         = 0,        // For BeginPopupContext*(): open on Left Mouse release. Guaranteed to always be == 0 (same as ImGuiMouseButton_Left)
-    MouseButtonRight        = 1,        // For BeginPopupContext*(): open on Right Mouse release. Guaranteed to always be == 1 (same as ImGuiMouseButton_Right)
-    MouseButtonMiddle       = 2,        // For BeginPopupContext*(): open on Middle Mouse release. Guaranteed to always be == 2 (same as ImGuiMouseButton_Middle)
-    MouseButtonMask_        = 0x1F,
+    MouseButtonLeft = 0, // For BeginPopupContext*(): open on Left Mouse release. Guaranteed to always be == 0 (same as ImGuiMouseButton_Left)
+    MouseButtonRight = 1, // For BeginPopupContext*(): open on Right Mouse release. Guaranteed to always be == 1 (same as ImGuiMouseButton_Right)
+    MouseButtonMiddle = 2, // For BeginPopupContext*(): open on Middle Mouse release. Guaranteed to always be == 2 (same as ImGuiMouseButton_Middle)
+    MouseButtonMask_ = 0x1F,
     //MouseButtonDefault_     = 1,
-    NoOpenOverExistingPopup = 1 << 5,   // For OpenPopup*(), BeginPopupContext*(): don't open if there's already a popup at the same level of the popup stack
-    NoOpenOverItems         = 1 << 6,   // For BeginPopupContextWindow(): don't return true when hovering items, only when hovering empty space
-    AnyPopupId              = 1 << 7,   // For IsPopupOpen(): ignore the ImGuiID parameter and test for any popup.
-    AnyPopupLevel           = 1 << 8,   // For IsPopupOpen(): search/test at any level of the popup stack (default test in the current level)
-    AnyPopup                = 1 << 7 | 1 << 8,
+    NoOpenOverExistingPopup = 1 << 5, // For OpenPopup*(), BeginPopupContext*(): don't open if there's already a popup at the same level of the popup stack
+    NoOpenOverItems = 1 << 6, // For BeginPopupContextWindow(): don't return true when hovering items, only when hovering empty space
+    AnyPopupId = 1 << 7, // For IsPopupOpen(): ignore the ImGuiID parameter and test for any popup.
+    AnyPopupLevel = 1 << 8, // For IsPopupOpen(): search/test at any level of the popup stack (default test in the current level)
+    AnyPopup = 1 << 7 | 1 << 8,
 };
 
 /// Flags for ImGui::Selectable()
 const SelectableFlags = enum(u32) {
-    None               = 0,
-    DontClosePopups    = 1 << 0,   // Clicking this don't close parent popup window
-    SpanAllColumns     = 1 << 1,   // Selectable frame can span all columns (text will still fit in current column)
-    AllowDoubleClick   = 1 << 2,   // Generate press events on double clicks too
-    Disabled           = 1 << 3,   // Cannot be selected, display grayed out text
-    AllowItemOverlap   = 1 << 4,   // (WIP) Hit testing to allow subsequent widgets to overlap this one
+    None = 0,
+    DontClosePopups = 1 << 0, // Clicking this don't close parent popup window
+    SpanAllColumns = 1 << 1, // Selectable frame can span all columns (text will still fit in current column)
+    AllowDoubleClick = 1 << 2, // Generate press events on double clicks too
+    Disabled = 1 << 3, // Cannot be selected, display grayed out text
+    AllowItemOverlap = 1 << 4, // (WIP) Hit testing to allow subsequent widgets to overlap this one
 };
 
 /// Flags for ImGui::BeginCombo()
 const ComboFlags = enum(u32) {
-    None                    = 0,
-    PopupAlignLeft          = 1 << 0,   // Align the popup toward the left by default
-    HeightSmall             = 1 << 1,   // Max ~4 items visible. Tip: If you want your combo popup to be a specific size you can use SetNextWindowSizeConstraints() prior to calling BeginCombo()
-    HeightRegular           = 1 << 2,   // Max ~8 items visible (default)
-    HeightLarge             = 1 << 3,   // Max ~20 items visible
-    HeightLargest           = 1 << 4,   // As many fitting items as possible
-    NoArrowButton           = 1 << 5,   // Display on the preview box without the square arrow button
-    NoPreview               = 1 << 6,   // Display only a square arrow button
+    None = 0,
+    PopupAlignLeft = 1 << 0, // Align the popup toward the left by default
+    HeightSmall = 1 << 1, // Max ~4 items visible. Tip: If you want your combo popup to be a specific size you can use SetNextWindowSizeConstraints() prior to calling BeginCombo()
+    HeightRegular = 1 << 2, // Max ~8 items visible (default)
+    HeightLarge = 1 << 3, // Max ~20 items visible
+    HeightLargest = 1 << 4, // As many fitting items as possible
+    NoArrowButton = 1 << 5, // Display on the preview box without the square arrow button
+    NoPreview = 1 << 6, // Display only a square arrow button
 };
 
 /// Flags for ImGui::InputText()
 const InputTextFlags = enum(u32) {
-    None                = 0,
-    CharsDecimal        = 1 << 0,   // Allow 0123456789.+-*/
-    CharsHexadecimal    = 1 << 1,   // Allow 0123456789ABCDEFabcdef
-    CharsUppercase      = 1 << 2,   // Turn a..z into A..Z
-    CharsNoBlank        = 1 << 3,   // Filter out spaces, tabs
-    AutoSelectAll       = 1 << 4,   // Select entire text when first taking mouse focus
-    EnterReturnsTrue    = 1 << 5,   // Return 'true' when Enter is pressed (as opposed to every time the value was modified). Consider looking at the IsItemDeactivatedAfterEdit() function.
-    CallbackCompletion  = 1 << 6,   // Callback on pressing TAB (for completion handling)
-    CallbackHistory     = 1 << 7,   // Callback on pressing Up/Down arrows (for history handling)
-    CallbackAlways      = 1 << 8,   // Callback on each iteration. User code may query cursor position, modify text buffer.
-    CallbackCharFilter  = 1 << 9,   // Callback on character inputs to replace or discard them. Modify 'EventChar' to replace or discard, or return 1 in callback to discard.
-    AllowTabInput       = 1 << 10,  // Pressing TAB input a '\t' character into the text field
-    CtrlEnterForNewLine = 1 << 11,  // In multi-line mode, unfocus with Enter, add new line with Ctrl+Enter (default is opposite: unfocus with Ctrl+Enter, add line with Enter).
-    NoHorizontalScroll  = 1 << 12,  // Disable following the cursor horizontally
-    AlwaysOverwrite     = 1 << 13,  // Overwrite mode
-    ReadOnly            = 1 << 14,  // Read-only mode
-    Password            = 1 << 15,  // Password mode, display all characters as '*'
-    NoUndoRedo          = 1 << 16,  // Disable undo/redo. Note that input text owns the text data while active, if you want to provide your own undo/redo stack you need e.g. to call ClearActiveID().
-    CharsScientific     = 1 << 17,  // Allow 0123456789.+-*/eE (Scientific notation input)
-    CallbackResize      = 1 << 18,  // Callback on buffer capacity changes request (beyond 'buf_size' parameter value), allowing the string to grow. Notify when the string wants to be resized (for string types which hold a cache of their Size). You will be provided a new BufSize in the callback and NEED to honor it. (see misc/cpp/imgui_stdlib.h for an example of using this)
-    CallbackEdit        = 1 << 19,  // Callback on any edit (note that InputText() already returns true on edit, the callback is useful mainly to manipulate the underlying buffer while focus is active)
+    None = 0,
+    CharsDecimal = 1 << 0, // Allow 0123456789.+-*/
+    CharsHexadecimal = 1 << 1, // Allow 0123456789ABCDEFabcdef
+    CharsUppercase = 1 << 2, // Turn a..z into A..Z
+    CharsNoBlank = 1 << 3, // Filter out spaces, tabs
+    AutoSelectAll = 1 << 4, // Select entire text when first taking mouse focus
+    EnterReturnsTrue = 1 << 5, // Return 'true' when Enter is pressed (as opposed to every time the value was modified). Consider looking at the IsItemDeactivatedAfterEdit() function.
+    CallbackCompletion = 1 << 6, // Callback on pressing TAB (for completion handling)
+    CallbackHistory = 1 << 7, // Callback on pressing Up/Down arrows (for history handling)
+    CallbackAlways = 1 << 8, // Callback on each iteration. User code may query cursor position, modify text buffer.
+    CallbackCharFilter = 1 << 9, // Callback on character inputs to replace or discard them. Modify 'EventChar' to replace or discard, or return 1 in callback to discard.
+    AllowTabInput = 1 << 10, // Pressing TAB input a '\t' character into the text field
+    CtrlEnterForNewLine = 1 << 11, // In multi-line mode, unfocus with Enter, add new line with Ctrl+Enter (default is opposite: unfocus with Ctrl+Enter, add line with Enter).
+    NoHorizontalScroll = 1 << 12, // Disable following the cursor horizontally
+    AlwaysOverwrite = 1 << 13, // Overwrite mode
+    ReadOnly = 1 << 14, // Read-only mode
+    Password = 1 << 15, // Password mode, display all characters as '*'
+    NoUndoRedo = 1 << 16, // Disable undo/redo. Note that input text owns the text data while active, if you want to provide your own undo/redo stack you need e.g. to call ClearActiveID().
+    CharsScientific = 1 << 17, // Allow 0123456789.+-*/eE (Scientific notation input)
+    CallbackResize = 1 << 18, // Callback on buffer capacity changes request (beyond 'buf_size' parameter value), allowing the string to grow. Notify when the string wants to be resized (for string types which hold a cache of their Size). You will be provided a new BufSize in the callback and NEED to honor it. (see misc/cpp/imgui_stdlib.h for an example of using this)
+    CallbackEdit = 1 << 19, // Callback on any edit (note that InputText() already returns true on edit, the callback is useful mainly to manipulate the underlying buffer while focus is active)
 };
 
 // Flags for ImGui::BeginTable()
@@ -884,84 +892,84 @@ const InputTextFlags = enum(u32) {
 // - Read on documentation at the top of imgui_tables.cpp for details.
 const TableFlags = enum(u32) {
     // Features
-    None                       = 0,
-    Resizable                  = 1 << 0,   // Enable resizing columns.
-    Reorderable                = 1 << 1,   // Enable reordering columns in header row (need calling TableSetupColumn() + TableHeadersRow() to display headers)
-    Hideable                   = 1 << 2,   // Enable hiding/disabling columns in context menu.
-    Sortable                   = 1 << 3,   // Enable sorting. Call TableGetSortSpecs() to obtain sort specs. Also see SortMulti and SortTristate.
-    NoSavedSettings            = 1 << 4,   // Disable persisting columns order, width and sort settings in the .ini file.
-    ContextMenuInBody          = 1 << 5,   // Right-click on columns body/contents will display table context menu. By default it is available in TableHeadersRow().
+    None = 0,
+    Resizable = 1 << 0, // Enable resizing columns.
+    Reorderable = 1 << 1, // Enable reordering columns in header row (need calling TableSetupColumn() + TableHeadersRow() to display headers)
+    Hideable = 1 << 2, // Enable hiding/disabling columns in context menu.
+    Sortable = 1 << 3, // Enable sorting. Call TableGetSortSpecs() to obtain sort specs. Also see SortMulti and SortTristate.
+    NoSavedSettings = 1 << 4, // Disable persisting columns order, width and sort settings in the .ini file.
+    ContextMenuInBody = 1 << 5, // Right-click on columns body/contents will display table context menu. By default it is available in TableHeadersRow().
     // Decorations
-    RowBg                      = 1 << 6,   // Set each RowBg color with ImGuiCol_TableRowBg or ImGuiCol_TableRowBgAlt (equivalent of calling TableSetBgColor with ImGuiTableBgFlags_RowBg0 on each row manually)
-    BordersInnerH              = 1 << 7,   // Draw horizontal borders between rows.
-    BordersOuterH              = 1 << 8,   // Draw horizontal borders at the top and bottom.
-    BordersInnerV              = 1 << 9,   // Draw vertical borders between columns.
-    BordersOuterV              = 1 << 10,  // Draw vertical borders on the left and right sides.
-    BordersH                   = 1 << 7 | 1 << 8, // Draw horizontal borders.
-    BordersV                   = 1 << 9 | 1 << 10, // Draw vertical borders.
-    BordersInner               = 1 << 9 | 1 << 7, // Draw inner borders.
-    BordersOuter               = 1 << 10 | 1 << 8, // Draw outer borders.
-    Borders                    = 1 << 9 | 1 << 7 | 1 << 10 | 1 << 8,   // Draw all borders.
-    NoBordersInBody            = 1 << 11,  // [ALPHA] Disable vertical borders in columns Body (borders will always appears in Headers). -> May move to style
-    NoBordersInBodyUntilResize = 1 << 12,  // [ALPHA] Disable vertical borders in columns Body until hovered for resize (borders will always appears in Headers). -> May move to style
+    RowBg = 1 << 6, // Set each RowBg color with ImGuiCol_TableRowBg or ImGuiCol_TableRowBgAlt (equivalent of calling TableSetBgColor with ImGuiTableBgFlags_RowBg0 on each row manually)
+    BordersInnerH = 1 << 7, // Draw horizontal borders between rows.
+    BordersOuterH = 1 << 8, // Draw horizontal borders at the top and bottom.
+    BordersInnerV = 1 << 9, // Draw vertical borders between columns.
+    BordersOuterV = 1 << 10, // Draw vertical borders on the left and right sides.
+    BordersH = 1 << 7 | 1 << 8, // Draw horizontal borders.
+    BordersV = 1 << 9 | 1 << 10, // Draw vertical borders.
+    BordersInner = 1 << 9 | 1 << 7, // Draw inner borders.
+    BordersOuter = 1 << 10 | 1 << 8, // Draw outer borders.
+    Borders = 1 << 9 | 1 << 7 | 1 << 10 | 1 << 8, // Draw all borders.
+    NoBordersInBody = 1 << 11, // [ALPHA] Disable vertical borders in columns Body (borders will always appears in Headers). -> May move to style
+    NoBordersInBodyUntilResize = 1 << 12, // [ALPHA] Disable vertical borders in columns Body until hovered for resize (borders will always appears in Headers). -> May move to style
     // Sizing Policy (read above for defaults)
-    SizingFixedFit             = 1 << 13,  // Columns default to _WidthFixed or _WidthAuto (if resizable or not resizable), matching contents width.
-    SizingFixedSame            = 2 << 13,  // Columns default to _WidthFixed or _WidthAuto (if resizable or not resizable), matching the maximum contents width of all columns. Implicitly enable NoKeepColumnsVisible.
-    SizingStretchProp          = 3 << 13,  // Columns default to _WidthStretch with default weights proportional to each columns contents widths.
-    SizingStretchSame          = 4 << 13,  // Columns default to _WidthStretch with default weights all equal, unless overridden by TableSetupColumn().
+    SizingFixedFit = 1 << 13, // Columns default to _WidthFixed or _WidthAuto (if resizable or not resizable), matching contents width.
+    SizingFixedSame = 2 << 13, // Columns default to _WidthFixed or _WidthAuto (if resizable or not resizable), matching the maximum contents width of all columns. Implicitly enable NoKeepColumnsVisible.
+    SizingStretchProp = 3 << 13, // Columns default to _WidthStretch with default weights proportional to each columns contents widths.
+    SizingStretchSame = 4 << 13, // Columns default to _WidthStretch with default weights all equal, unless overridden by TableSetupColumn().
     // Sizing Extra Options
-    NoHostExtendX              = 1 << 16,  // Make outer width auto-fit to columns, overriding outer_size.x value. Only available when ScrollX/ScrollY are disabled and Stretch columns are not used.
-    NoHostExtendY              = 1 << 17,  // Make outer height stop exactly at outer_size.y (prevent auto-extending table past the limit). Only available when ScrollX/ScrollY are disabled. Data below the limit will be clipped and not visible.
-    NoKeepColumnsVisible       = 1 << 18,  // Disable keeping column always minimally visible when ScrollX is off and table gets too small. Not recommended if columns are resizable.
-    PreciseWidths              = 1 << 19,  // Disable distributing remainder width to stretched columns (width allocation on a 100-wide table with 3 columns: Without this flag: 33,33,34. With this flag: 33,33,33). With larger number of columns, resizing will appear to be less smooth.
+    NoHostExtendX = 1 << 16, // Make outer width auto-fit to columns, overriding outer_size.x value. Only available when ScrollX/ScrollY are disabled and Stretch columns are not used.
+    NoHostExtendY = 1 << 17, // Make outer height stop exactly at outer_size.y (prevent auto-extending table past the limit). Only available when ScrollX/ScrollY are disabled. Data below the limit will be clipped and not visible.
+    NoKeepColumnsVisible = 1 << 18, // Disable keeping column always minimally visible when ScrollX is off and table gets too small. Not recommended if columns are resizable.
+    PreciseWidths = 1 << 19, // Disable distributing remainder width to stretched columns (width allocation on a 100-wide table with 3 columns: Without this flag: 33,33,34. With this flag: 33,33,33). With larger number of columns, resizing will appear to be less smooth.
     // Clipping
-    NoClip                     = 1 << 20,  // Disable clipping rectangle for every individual columns (reduce draw command count, items will be able to overflow into other columns). Generally incompatible with TableSetupScrollFreeze().
+    NoClip = 1 << 20, // Disable clipping rectangle for every individual columns (reduce draw command count, items will be able to overflow into other columns). Generally incompatible with TableSetupScrollFreeze().
     // Padding
-    PadOuterX                  = 1 << 21,  // Default if BordersOuterV is on. Enable outer-most padding. Generally desirable if you have headers.
-    NoPadOuterX                = 1 << 22,  // Default if BordersOuterV is off. Disable outer-most padding.
-    NoPadInnerX                = 1 << 23,  // Disable inner padding between columns (double inner padding if BordersOuterV is on, single inner padding if BordersOuterV is off).
+    PadOuterX = 1 << 21, // Default if BordersOuterV is on. Enable outer-most padding. Generally desirable if you have headers.
+    NoPadOuterX = 1 << 22, // Default if BordersOuterV is off. Disable outer-most padding.
+    NoPadInnerX = 1 << 23, // Disable inner padding between columns (double inner padding if BordersOuterV is on, single inner padding if BordersOuterV is off).
     // Scrolling
-    ScrollX                    = 1 << 24,  // Enable horizontal scrolling. Require 'outer_size' parameter of BeginTable() to specify the container size. Changes default sizing policy. Because this create a child window, ScrollY is currently generally recommended when using ScrollX.
-    ScrollY                    = 1 << 25,  // Enable vertical scrolling. Require 'outer_size' parameter of BeginTable() to specify the container size.
+    ScrollX = 1 << 24, // Enable horizontal scrolling. Require 'outer_size' parameter of BeginTable() to specify the container size. Changes default sizing policy. Because this create a child window, ScrollY is currently generally recommended when using ScrollX.
+    ScrollY = 1 << 25, // Enable vertical scrolling. Require 'outer_size' parameter of BeginTable() to specify the container size.
     // Sorting
-    SortMulti                  = 1 << 26,  // Hold shift when clicking headers to sort on multiple column. TableGetSortSpecs() may return specs where (SpecsCount > 1).
-    SortTristate               = 1 << 27,  // Allow no sorting, disable default sorting. TableGetSortSpecs() may return specs where (SpecsCount == 0).
+    SortMulti = 1 << 26, // Hold shift when clicking headers to sort on multiple column. TableGetSortSpecs() may return specs where (SpecsCount > 1).
+    SortTristate = 1 << 27, // Allow no sorting, disable default sorting. TableGetSortSpecs() may return specs where (SpecsCount == 0).
 };
 
 // Flags for ImGui::TableSetupColumn()
-const TableColumnFlags = enum (u32) {
+const TableColumnFlags = enum(u32) {
     // Input configuration flags
-    None                  = 0,
-    Disabled              = 1 << 0,   // Overriding/master disable flag: hide column, won't show in context menu (unlike calling TableSetColumnEnabled() which manipulates the user accessible state)
-    DefaultHide           = 1 << 1,   // Default as a hidden/disabled column.
-    DefaultSort           = 1 << 2,   // Default as a sorting column.
-    WidthStretch          = 1 << 3,   // Column will stretch. Preferable with horizontal scrolling disabled (default if table sizing policy is _SizingStretchSame or _SizingStretchProp).
-    WidthFixed            = 1 << 4,   // Column will not stretch. Preferable with horizontal scrolling enabled (default if table sizing policy is _SizingFixedFit and table is resizable).
-    NoResize              = 1 << 5,   // Disable manual resizing.
-    NoReorder             = 1 << 6,   // Disable manual reordering this column, this will also prevent other columns from crossing over this column.
-    NoHide                = 1 << 7,   // Disable ability to hide/disable this column.
-    NoClip                = 1 << 8,   // Disable clipping for this column (all NoClip columns will render in a same draw command).
-    NoSort                = 1 << 9,   // Disable ability to sort on this field (even if Sortable is set on the table).
-    NoSortAscending       = 1 << 10,  // Disable ability to sort in the ascending direction.
-    NoSortDescending      = 1 << 11,  // Disable ability to sort in the descending direction.
-    NoHeaderLabel         = 1 << 12,  // TableHeadersRow() will not submit label for this column. Convenient for some small columns. Name will still appear in context menu.
-    NoHeaderWidth         = 1 << 13,  // Disable header text width contribution to automatic column width.
-    PreferSortAscending   = 1 << 14,  // Make the initial sort direction Ascending when first sorting on this column (default).
-    PreferSortDescending  = 1 << 15,  // Make the initial sort direction Descending when first sorting on this column.
-    IndentEnable          = 1 << 16,  // Use current Indent value when entering cell (default for column 0).
-    IndentDisable         = 1 << 17,  // Ignore current Indent value when entering cell (default for columns > 0). Indentation changes _within_ the cell will still be honored.
+    None = 0,
+    Disabled = 1 << 0, // Overriding/master disable flag: hide column, won't show in context menu (unlike calling TableSetColumnEnabled() which manipulates the user accessible state)
+    DefaultHide = 1 << 1, // Default as a hidden/disabled column.
+    DefaultSort = 1 << 2, // Default as a sorting column.
+    WidthStretch = 1 << 3, // Column will stretch. Preferable with horizontal scrolling disabled (default if table sizing policy is _SizingStretchSame or _SizingStretchProp).
+    WidthFixed = 1 << 4, // Column will not stretch. Preferable with horizontal scrolling enabled (default if table sizing policy is _SizingFixedFit and table is resizable).
+    NoResize = 1 << 5, // Disable manual resizing.
+    NoReorder = 1 << 6, // Disable manual reordering this column, this will also prevent other columns from crossing over this column.
+    NoHide = 1 << 7, // Disable ability to hide/disable this column.
+    NoClip = 1 << 8, // Disable clipping for this column (all NoClip columns will render in a same draw command).
+    NoSort = 1 << 9, // Disable ability to sort on this field (even if Sortable is set on the table).
+    NoSortAscending = 1 << 10, // Disable ability to sort in the ascending direction.
+    NoSortDescending = 1 << 11, // Disable ability to sort in the descending direction.
+    NoHeaderLabel = 1 << 12, // TableHeadersRow() will not submit label for this column. Convenient for some small columns. Name will still appear in context menu.
+    NoHeaderWidth = 1 << 13, // Disable header text width contribution to automatic column width.
+    PreferSortAscending = 1 << 14, // Make the initial sort direction Ascending when first sorting on this column (default).
+    PreferSortDescending = 1 << 15, // Make the initial sort direction Descending when first sorting on this column.
+    IndentEnable = 1 << 16, // Use current Indent value when entering cell (default for column 0).
+    IndentDisable = 1 << 17, // Ignore current Indent value when entering cell (default for columns > 0). Indentation changes _within_ the cell will still be honored.
 
     // Output status flags, read-only via TableGetColumnFlags()
-    IsEnabled             = 1 << 24,  // Status: is enabled == not hidden by user/api (referred to as "Hide" in _DefaultHide and _NoHide) flags.
-    IsVisible             = 1 << 25,  // Status: is visible == is enabled AND not clipped by scrolling.
-    IsSorted              = 1 << 26,  // Status: is currently part of the sort specs
-    IsHovered             = 1 << 27,  // Status: is hovered by mouse
+    IsEnabled = 1 << 24, // Status: is enabled == not hidden by user/api (referred to as "Hide" in _DefaultHide and _NoHide) flags.
+    IsVisible = 1 << 25, // Status: is visible == is enabled AND not clipped by scrolling.
+    IsSorted = 1 << 26, // Status: is currently part of the sort specs
+    IsHovered = 1 << 27, // Status: is hovered by mouse
 };
 
 // Flags for ImGui::TableNextRow()
-const TableRowFlags = enum (u32) {
-    None                     = 0,
-    Headers                  = 1 << 0,   // Identify header row (set default background color + width of its contents accounted differently for auto column width)
+const TableRowFlags = enum(u32) {
+    None = 0,
+    Headers = 1 << 0, // Identify header row (set default background color + width of its contents accounted differently for auto column width)
 };
 
 // Enum for ImGui::TableSetBgColor()
@@ -974,10 +982,10 @@ const TableRowFlags = enum (u32) {
 // If you set the color of RowBg0 target, your color will override the existing RowBg0 color.
 // If you set the color of RowBg1 or ColumnBg1 target, your color will blend over the RowBg0 color.
 const TableBgTarget = enum(u32) {
-    None                     = 0,
-    RowBg0                   = 1,        // Set row background color 0 (generally used for background, automatically set when RowBg is used)
-    RowBg1                   = 2,        // Set row background color 1 (generally used for selection marking)
-    CellBg                   = 3,        // Set cell background color (top-most color)
+    None = 0,
+    RowBg0 = 1, // Set row background color 0 (generally used for background, automatically set when RowBg is used)
+    RowBg1 = 2, // Set row background color 1 (generally used for selection marking)
+    CellBg = 3, // Set cell background color (top-most color)
 };
 
 /// Keys value 0 to 511 are left unused as legacy native/opaque key values (< 1.87)
@@ -985,7 +993,7 @@ const TableBgTarget = enum(u32) {
 const GuiKey = enum(u32) {
     // Keyboard
     None = 0,
-    Tab = 512,             // == NamedKey_BEGIN
+    Tab = 512, // == NamedKey_BEGIN
     LeftArrow,
     RightArrow,
     UpArrow,
@@ -1000,33 +1008,89 @@ const GuiKey = enum(u32) {
     Space,
     Enter,
     Escape,
-    LeftCtrl, LeftShift, LeftAlt, LeftSuper,
-    RightCtrl, RightShift, RightAlt, RightSuper,
+    LeftCtrl,
+    LeftShift,
+    LeftAlt,
+    LeftSuper,
+    RightCtrl,
+    RightShift,
+    RightAlt,
+    RightSuper,
     Menu,
-    @"0", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9",
-    A, B, C, D, E, F, G, H, I, J,
-    K, L, M, N, O, P, Q, R, S, T,
-    U, V, W, X, Y, Z,
-    F1, F2, F3, F4, F5, F6,
-    F7, F8, F9, F10, F11, F12,
-    Apostrophe,        // '
-    Comma,             // ,
-    Minus,             // -
-    Period,            // .
-    Slash,             // /
-    Semicolon,         // ;
-    Equal,             // =
-    LeftBracket,       // [
-    Backslash,         // \ (this text inhibit multiline comment caused by backslash)
-    RightBracket,      // ]
-    GraveAccent,       // `
+    @"0",
+    @"1",
+    @"2",
+    @"3",
+    @"4",
+    @"5",
+    @"6",
+    @"7",
+    @"8",
+    @"9",
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    Apostrophe, // '
+    Comma, // ,
+    Minus, // -
+    Period, // .
+    Slash, // /
+    Semicolon, // ;
+    Equal, // =
+    LeftBracket, // [
+    Backslash, // \ (this text inhibit multiline comment caused by backslash)
+    RightBracket, // ]
+    GraveAccent, // `
     CapsLock,
     ScrollLock,
     NumLock,
     PrintScreen,
     Pause,
-    Keypad0, Keypad1, Keypad2, Keypad3, Keypad4,
-    Keypad5, Keypad6, Keypad7, Keypad8, Keypad9,
+    Keypad0,
+    Keypad1,
+    Keypad2,
+    Keypad3,
+    Keypad4,
+    Keypad5,
+    Keypad6,
+    Keypad7,
+    Keypad8,
+    Keypad9,
     KeypadDecimal,
     KeypadDivide,
     KeypadMultiply,
@@ -1037,30 +1101,30 @@ const GuiKey = enum(u32) {
 
     // Gamepad (some of those are analog values, 0.0f to 1.0f)                          // GAME NAVIGATION ACTION
     // (download controller mapping PNG/PSD at http://dearimgui.org/controls_sheets)
-    GamepadStart,          // Menu (Xbox)      + (Switch)   Start/Options (PS)
-    GamepadBack,           // View (Xbox)      - (Switch)   Share (PS)
-    GamepadFaceLeft,       // X (Xbox)         Y (Switch)   Square (PS)        // Tap: Toggle Menu. Hold: Windowing mode (Focus/Move/Resize windows)
-    GamepadFaceRight,      // B (Xbox)         A (Switch)   Circle (PS)        // Cancel / Close / Exit
-    GamepadFaceUp,         // Y (Xbox)         X (Switch)   Triangle (PS)      // Text Input / On-screen Keyboard
-    GamepadFaceDown,       // A (Xbox)         B (Switch)   Cross (PS)         // Activate / Open / Toggle / Tweak
-    GamepadDpadLeft,       // D-pad Left                                       // Move / Tweak / Resize Window (in Windowing mode)
-    GamepadDpadRight,      // D-pad Right                                      // Move / Tweak / Resize Window (in Windowing mode)
-    GamepadDpadUp,         // D-pad Up                                         // Move / Tweak / Resize Window (in Windowing mode)
-    GamepadDpadDown,       // D-pad Down                                       // Move / Tweak / Resize Window (in Windowing mode)
-    GamepadL1,             // L Bumper (Xbox)  L (Switch)   L1 (PS)            // Tweak Slower / Focus Previous (in Windowing mode)
-    GamepadR1,             // R Bumper (Xbox)  R (Switch)   R1 (PS)            // Tweak Faster / Focus Next (in Windowing mode)
-    GamepadL2,             // L Trig. (Xbox)   ZL (Switch)  L2 (PS) [Analog]
-    GamepadR2,             // R Trig. (Xbox)   ZR (Switch)  R2 (PS) [Analog]
-    GamepadL3,             // L Stick (Xbox)   L3 (Switch)  L3 (PS)
-    GamepadR3,             // R Stick (Xbox)   R3 (Switch)  R3 (PS)
-    GamepadLStickLeft,     // [Analog]                                         // Move Window (in Windowing mode)
-    GamepadLStickRight,    // [Analog]                                         // Move Window (in Windowing mode)
-    GamepadLStickUp,       // [Analog]                                         // Move Window (in Windowing mode)
-    GamepadLStickDown,     // [Analog]                                         // Move Window (in Windowing mode)
-    GamepadRStickLeft,     // [Analog]
-    GamepadRStickRight,    // [Analog]
-    GamepadRStickUp,       // [Analog]
-    GamepadRStickDown,     // [Analog]
+    GamepadStart, // Menu (Xbox)      + (Switch)   Start/Options (PS)
+    GamepadBack, // View (Xbox)      - (Switch)   Share (PS)
+    GamepadFaceLeft, // X (Xbox)         Y (Switch)   Square (PS)        // Tap: Toggle Menu. Hold: Windowing mode (Focus/Move/Resize windows)
+    GamepadFaceRight, // B (Xbox)         A (Switch)   Circle (PS)        // Cancel / Close / Exit
+    GamepadFaceUp, // Y (Xbox)         X (Switch)   Triangle (PS)      // Text Input / On-screen Keyboard
+    GamepadFaceDown, // A (Xbox)         B (Switch)   Cross (PS)         // Activate / Open / Toggle / Tweak
+    GamepadDpadLeft, // D-pad Left                                       // Move / Tweak / Resize Window (in Windowing mode)
+    GamepadDpadRight, // D-pad Right                                      // Move / Tweak / Resize Window (in Windowing mode)
+    GamepadDpadUp, // D-pad Up                                         // Move / Tweak / Resize Window (in Windowing mode)
+    GamepadDpadDown, // D-pad Down                                       // Move / Tweak / Resize Window (in Windowing mode)
+    GamepadL1, // L Bumper (Xbox)  L (Switch)   L1 (PS)            // Tweak Slower / Focus Previous (in Windowing mode)
+    GamepadR1, // R Bumper (Xbox)  R (Switch)   R1 (PS)            // Tweak Faster / Focus Next (in Windowing mode)
+    GamepadL2, // L Trig. (Xbox)   ZL (Switch)  L2 (PS) [Analog]
+    GamepadR2, // R Trig. (Xbox)   ZR (Switch)  R2 (PS) [Analog]
+    GamepadL3, // L Stick (Xbox)   L3 (Switch)  L3 (PS)
+    GamepadR3, // R Stick (Xbox)   R3 (Switch)  R3 (PS)
+    GamepadLStickLeft, // [Analog]                                         // Move Window (in Windowing mode)
+    GamepadLStickRight, // [Analog]                                         // Move Window (in Windowing mode)
+    GamepadLStickUp, // [Analog]                                         // Move Window (in Windowing mode)
+    GamepadLStickDown, // [Analog]                                         // Move Window (in Windowing mode)
+    GamepadRStickLeft, // [Analog]
+    GamepadRStickRight, // [Analog]
+    GamepadRStickUp, // [Analog]
+    GamepadRStickDown, // [Analog]
 
     // Keyboard Modifiers (explicitly submitted by backend via AddKeyEvent() calls)
     // - This is mirroring the data also written to io.KeyCtrl, io.KeyShift, io.KeyAlt, io.KeySuper, in a format allowing
@@ -1070,18 +1134,27 @@ const GuiKey = enum(u32) {
     // - In theory the value of keyboard modifiers should be roughly equivalent to a logical or of the equivalent left/right keys.
     //   In practice: it's complicated; mods are often provided from different sources. Keyboard layout, IME, sticky keys and
     //   backends tend to interfere and break that equivalence. The safer decision is to relay that ambiguity down to the end-user...
-    ModCtrl, ModShift, ModAlt, ModSuper,
+    ModCtrl,
+    ModShift,
+    ModAlt,
+    ModSuper,
 
     // Mouse Buttons (auto-submitted from AddMouseButtonEvent() calls)
     // - This is mirroring the data also written to io.MouseDown[], io.MouseWheel, in a format allowing them to be accessed via standard key API.
-    MouseLeft, MouseRight, MouseMiddle, MouseX1, MouseX2, MouseWheelX, MouseWheelY,
+    MouseLeft,
+    MouseRight,
+    MouseMiddle,
+    MouseX1,
+    MouseX2,
+    MouseWheelX,
+    MouseWheelY,
 
     // End of list
-    COUNT,                 // No valid ImGuiKey is ever greater than this value
+    COUNT, // No valid ImGuiKey is ever greater than this value
 
     // [Internal] Prior to 1.87 we required user to fill io.KeysDown[512] using their own native index + a io.KeyMap[] array.
     // We are ditching this method but keeping a legacy path for user code doing e.g. IsKeyPressed(MY_NATIVE_KEY_CODE)
-    NamedKey_BEGIN         = 512,
+    NamedKey_BEGIN = 512,
     //NamedKey_END           = COUNT,
     //NamedKey_COUNT         = NamedKey_END - NamedKey_BEGIN,
     //KeysData_SIZE          = COUNT,                   // Size of KeysData[]: hold legacy 0..512 keycodes + named keys
@@ -1135,7 +1208,6 @@ pub const ColorSolarized = struct {
     pub const rgbablue = 0xFFD2_8B26;
     pub const rgbacyan = 0xFF98_A12A;
     pub const rgbagreen = 0xFF00_9985;
-
 };
 
 pub fn setImguiTheme() void {
@@ -1222,10 +1294,10 @@ pub fn formatZ(comptime fmt: []const u8, args: anytype) [:0]const u8 {
 
 /// Null terminate `source` into `dest` buffer, potentially clamping it to fit.
 fn copyZ(dest: []u8, source: []const u8) [:0]const u8 {
-    std.mem.copy(u8, dest, if (source.len > dest.len) source[0..dest.len-1] else source);
-    var slice: []u8 = dest[0.. if (source.len > dest.len) dest.len else source.len+1];
-    dest[slice.len-1] = 0;
+    std.mem.copy(u8, dest, if (source.len > dest.len) source[0 .. dest.len - 1] else source);
+    var slice: []u8 = dest[0..if (source.len > dest.len) dest.len else source.len + 1];
+    dest[slice.len - 1] = 0;
 
-    var a = slice[0..slice.len-1 :0];
+    var a = slice[0 .. slice.len - 1 :0];
     return a;
 }
