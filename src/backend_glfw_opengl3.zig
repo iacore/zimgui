@@ -126,7 +126,7 @@ pub const OpenGl3 = struct {
     /// glDeleteTextures deletes n textures named by the elements of the array textures. After a texture is deleted, it has no contents or dimensionality, and its name is free for reuse (for example by glGenTextures). If a texture that is currently bound is deleted, the binding reverts to 0 (the default texture).
     /// glDeleteTextures silently ignores 0's and names that do not correspond to existing textures.
     pub fn deleteTextures(textures: []const TextureId) void {
-        zimgui_glDeleteTextures(@intCast(i32, textures.len), textures.ptr);
+        zimgui_glDeleteTextures(@as(i32, @intCast(textures.len)), textures.ptr);
     }
     extern fn zimgui_glDeleteTextures(i32, [*]const u32) void;
 
@@ -343,7 +343,7 @@ pub const OpenGl3 = struct {
     /// GL_INVALID_OPERATION is generated if count is greater than 1 and the indicated uniform variable is not an array variable.
     /// GL_INVALID_OPERATION is generated if a sampler is loaded using a command other than glUniform1i and glUniform1iv.
     pub fn uniform4fv(location: i32, value: [4]f32) error{ InvalidOperation, InvalidValue }!void {
-        zimgui_glUniform4fv(location, @intCast(i32, value.len), value.ptr);
+        zimgui_glUniform4fv(location, @as(i32, @intCast(value.len)), value.ptr);
         switch (getError()) {
             NO_ERROR => {},
             INVALID_VALUE => return error.InvalidValue,
@@ -393,7 +393,7 @@ pub const OpenGl3 = struct {
     /// Errors
     /// GL_INVALID_VALUE is generated if n is negative.
     pub fn createBuffers(buffers: []u32) error.InvalidValue!void {
-        zimgui_glCreateBuffers(@intCast(i32, buffers.len), buffers.ptr);
+        zimgui_glCreateBuffers(@as(i32, @intCast(buffers.len)), buffers.ptr);
         switch (getError()) {
             NO_ERROR => {},
             INVALID_VALUE => return error.InvalidValue,
@@ -444,7 +444,7 @@ pub const OpenGl3 = struct {
     /// Errors
     /// GL_INVALID_VALUE is generated if n is negative.
     pub fn createVertexArrays(arrays: []u32) error.InvalidValue!void {
-        zimgui_glCreateVertexArrays(@intCast(i32, arrays.len), arrays.ptr);
+        zimgui_glCreateVertexArrays(@as(i32, @intCast(arrays.len)), arrays.ptr);
         switch (getError()) {
             NO_ERROR => {},
             INVALID_VALUE => return error.InvalidValue,

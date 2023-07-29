@@ -104,7 +104,7 @@ extern fn zimgui_getVersion() [*:0]const u8;
 //    returned true. Begin and BeginChild are the only odd ones out. Will be fixed in a future update.]
 // - Note that the bottom of window stack always contains a window called "Debug".
 pub fn begin(name: [*:0]const u8, open: ?*bool, flags: WindowFlags) void {
-    zimgui_begin(name, open, @bitCast(u32, flags));
+    zimgui_begin(name, open, @as(u32, @bitCast(flags)));
 }
 extern fn zimgui_begin([*:0]const u8, ?*bool, u32) void;
 
@@ -116,15 +116,15 @@ extern fn zimgui_end() void;
 // set next window position. call before Begin(). use pivot=(0.5f,0.5f) to center on given point, etc.
 pub fn setNextWindowPos(pos: Vec2, cond: GuiCond, pivot: ?Vec2) void {
     if (pivot) |p| {
-        zimgui_setNextWindowPos(pos.x, pos.y, @enumToInt(cond), p.x, p.y);
+        zimgui_setNextWindowPos(pos.x, pos.y, @intFromEnum(cond), p.x, p.y);
     } else {
-        zimgui_setNextWindowPos(pos.x, pos.y, @enumToInt(cond), 0, 0);
+        zimgui_setNextWindowPos(pos.x, pos.y, @intFromEnum(cond), 0, 0);
     }
 }
 extern fn zimgui_setNextWindowPos(f32, f32, u32, f32, f32) void;
 
 pub fn setNextWindowSize(size: Vec2, cond: GuiCond) void {
-    zimgui_setNextWindowSize(size.x, size.y, @enumToInt(cond));
+    zimgui_setNextWindowSize(size.x, size.y, @intFromEnum(cond));
 }
 extern fn zimgui_setNextWindowSize(f32, f32, u32) void;
 
@@ -139,7 +139,7 @@ extern fn zimgui_setNextWindowFocus() void;
 
 // modify a style color. always use this if you modify the style after NewFrame().
 pub fn pushStyleColor(style_col: StyleCol, color: u32) void {
-    zimgui_pushStyleColor(@enumToInt(style_col), color);
+    zimgui_pushStyleColor(@intFromEnum(style_col), color);
 }
 extern fn zimgui_pushStyleColor(u32, u32) void;
 
@@ -217,7 +217,7 @@ pub fn beginCombo(label: []const u8, preview_value: []const u8, flags: ComboFlag
     var b2: [1024]u8 = undefined;
     var pv = copyZ(&b2, preview_value);
 
-    return zimgui_beginCombo(l.ptr, pv.ptr, @enumToInt(flags));
+    return zimgui_beginCombo(l.ptr, pv.ptr, @intFromEnum(flags));
 }
 extern fn zimgui_beginCombo([*]const u8, [*]const u8, u32) bool;
 
@@ -232,9 +232,9 @@ pub fn selectable(label: []const u8, selected: bool, flags: SelectableFlags, siz
     var l = copyZ(&b, label);
 
     if (size) |s| {
-        return zimgui_selectable(l.ptr, selected, @enumToInt(flags), s.x, s.y);
+        return zimgui_selectable(l.ptr, selected, @intFromEnum(flags), s.x, s.y);
     } else {
-        return zimgui_selectable(l.ptr, selected, @enumToInt(flags), 0, 0);
+        return zimgui_selectable(l.ptr, selected, @intFromEnum(flags), 0, 0);
     }
 }
 extern fn zimgui_selectable([*]const u8, bool, u32, f32, f32) bool;
@@ -257,14 +257,14 @@ extern fn zimgui_sliderFloat([*]const u8, *f32, f32, f32) bool;
 
 pub fn inputText(comptime fmt: []const u8, args: anytype, buf: []u8, flags: InputTextFlags) bool {
     var res = formatZ(fmt, args);
-    return zimgui_inputText(res.ptr, buf.ptr, buf.len, @enumToInt(flags));
+    return zimgui_inputText(res.ptr, buf.ptr, buf.len, @intFromEnum(flags));
 }
 extern fn zimgui_inputText([*]const u8, [*]u8, usize, u32) bool;
 
 pub fn inputTextMultiline(comptime fmt: []const u8, args: anytype, buf: []u8, size: ?Vec2, flags: InputTextFlags) bool {
     var size_ = if (size) |s| s else Vec2{ .x = 0, .y = 0 };
     var res = formatZ(fmt, args);
-    return zimgui_inputTextMultiline(res.ptr, buf.ptr, buf.len, size_.x, size_.y, @enumToInt(flags));
+    return zimgui_inputTextMultiline(res.ptr, buf.ptr, buf.len, size_.x, size_.y, @intFromEnum(flags));
 }
 extern fn zimgui_inputTextMultiline([*]const u8, [*]u8, usize, f32, f32, u32) bool;
 
@@ -275,7 +275,7 @@ pub fn inputTextWithHint(comptime label: []const u8, label_args: anytype, compti
 
     var hint_z = formatZ(hint, hint_args);
 
-    return zimgui_inputTextWithHint(label_z.ptr, hint_z.ptr, buf.ptr, buf.len, @enumToInt(flags));
+    return zimgui_inputTextWithHint(label_z.ptr, hint_z.ptr, buf.ptr, buf.len, @intFromEnum(flags));
 }
 extern fn zimgui_inputTextWithHint([*]const u8, [*]const u8, [*]const u8, usize, u32) bool;
 
@@ -337,9 +337,9 @@ pub fn beginTable(comptime fmt: []const u8, args: anytype, column: i32, flags: T
     var l = formatZ(fmt, args);
 
     if (outer_size) |s| {
-        return zimgui_beginTable(l.ptr, column, @enumToInt(flags), s.x, s.y, inner_width);
+        return zimgui_beginTable(l.ptr, column, @intFromEnum(flags), s.x, s.y, inner_width);
     } else {
-        return zimgui_beginTable(l.ptr, column, @enumToInt(flags), 0, 0, inner_width);
+        return zimgui_beginTable(l.ptr, column, @intFromEnum(flags), 0, 0, inner_width);
     }
 }
 extern fn zimgui_beginTable([*]const u8, i32, u32, f32, f32, f32) bool;
@@ -369,7 +369,7 @@ const GuiId = u32;
 pub fn tableSetupColumn(comptime fmt: []const u8, args: anytype, flags: TableColumnFlags, init_width_or_weight: f32, user_id: GuiId) void {
     var l = formatZ(fmt, args);
 
-    zimgui_tableSetupColumn(l.ptr, @enumToInt(flags), init_width_or_weight, user_id);
+    zimgui_tableSetupColumn(l.ptr, @intFromEnum(flags), init_width_or_weight, user_id);
 }
 extern fn zimgui_tableSetupColumn([*]const u8, u32, f32, GuiId) void;
 
@@ -402,7 +402,7 @@ extern fn zimgui_tableHeadersRow() void;
 pub fn beginPopup(str_id: []const u8, flags: WindowFlags) bool {
     var buf: [1024]u8 = undefined;
     var str_id_ = copyZ(&buf, str_id);
-    return zimgui_beginPopup(str_id_.ptr, @bitCast(u32, flags));
+    return zimgui_beginPopup(str_id_.ptr, @as(u32, @bitCast(flags)));
 }
 extern fn zimgui_beginPopup([*]const u8, u32) bool;
 
@@ -424,7 +424,7 @@ extern fn zimgui_endPopup() void;
 pub fn openPopup(str_id: []const u8, flags: PopupFlags) void {
     var buf: [1024]u8 = undefined;
     var str_id_ = copyZ(&buf, str_id);
-    zimgui_openPopup(str_id_.ptr, @enumToInt(flags));
+    zimgui_openPopup(str_id_.ptr, @intFromEnum(flags));
 }
 extern fn zimgui_openPopup([*]const u8, u32) void;
 
@@ -448,7 +448,7 @@ extern fn zimgui_calcTextSize([*]const u8, usize, f32, *f32, *f32) void;
 
 /// Convert f32: [0.0, 1.0] -> u8: [0, 255]
 pub fn colorF32ToU8(in: f32) u8 {
-    return @floatToInt(u8, (std.math.clamp(in, 0.0, 1.0) * 255.0 + 0.5));
+    return @as(u8, @intFromFloat((std.math.clamp(in, 0.0, 1.0) * 255.0 + 0.5)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -550,13 +550,13 @@ pub const FontAtlas = *opaque {
 
 pub const Style = *opaque {
     pub fn setColor(style: Style, style_col: StyleCol, color: Vec4) void {
-        zimgui_Style_setColor(style, @enumToInt(style_col), color.x, color.y, color.z, color.w);
+        zimgui_Style_setColor(style, @intFromEnum(style_col), color.x, color.y, color.z, color.w);
     }
     extern fn zimgui_Style_setColor(Style, u32, f32, f32, f32, f32) void;
 
     pub fn getColor(style: Style, style_col: StyleCol) Vec4 {
         var out: Vec4 = undefined;
-        zimgui_Style_getColor(style, @enumToInt(style_col), &out.x, &out.y, &out.z, &out.w);
+        zimgui_Style_getColor(style, @intFromEnum(style_col), &out.x, &out.y, &out.z, &out.w);
         return out;
     }
     extern fn zimgui_Style_getColor(Style, u32, *f32, *f32, *f32, *f32) void;
@@ -622,7 +622,7 @@ pub const DrawList = *opaque {
     extern fn zimgui_DrawList_addLine(DrawList, f32, f32, f32, f32, u32, f32) void;
 
     pub fn addRectFilled(draw_list: DrawList, rect: Rect, color: u32, rounding: f32, flags: DrawFlags) void {
-        zimgui_DrawList_addRectFilled(draw_list, rect.min.x, rect.min.y, rect.max.x, rect.max.y, color, rounding, @enumToInt(flags));
+        zimgui_DrawList_addRectFilled(draw_list, rect.min.x, rect.min.y, rect.max.x, rect.max.y, color, rounding, @intFromEnum(flags));
     }
     extern fn zimgui_DrawList_addRectFilled(DrawList, f32, f32, f32, f32, u32, f32, u32) void;
 };
@@ -653,10 +653,10 @@ pub const Vec4 = struct {
 
     /// If the Vec4 is used to store color, convert it to same representation in u32.
     pub fn colorConvert(color: Vec4) u32 {
-        var out: u32 = @intCast(u32, colorF32ToU8(color.x)) << col32_r_shift;
-        out |= @intCast(u32, colorF32ToU8(color.y)) << col32_g_shift;
-        out |= @intCast(u32, colorF32ToU8(color.z)) << col32_b_shift;
-        out |= @intCast(u32, colorF32ToU8(color.w)) << col32_a_shift;
+        var out: u32 = @as(u32, @intCast(colorF32ToU8(color.x))) << col32_r_shift;
+        out |= @as(u32, @intCast(colorF32ToU8(color.y))) << col32_g_shift;
+        out |= @as(u32, @intCast(colorF32ToU8(color.z))) << col32_b_shift;
+        out |= @as(u32, @intCast(colorF32ToU8(color.w))) << col32_a_shift;
         return out;
     }
 };

@@ -82,8 +82,8 @@ pub fn load(filename: [:0]const u8, x: *i32, y: *i32, channels_in_file: *i32, de
     var ptr: [*]u8 = undefined;
     if (zimage_load(filename.ptr, x, y, channels_in_file, desired_channels, &ptr)) {
         if (x.* <= 0 and y.* <= 0) return null;
-        var pixels = @intCast(usize, x.*) * @intCast(usize, y.*);
-        var bytes = if (desired_channels == 0) @intCast(usize, channels_in_file.*) else @intCast(usize, desired_channels);
+        var pixels = @as(usize, @intCast(x.*)) * @as(usize, @intCast(y.*));
+        var bytes = if (desired_channels == 0) @as(usize, @intCast(channels_in_file.*)) else @as(usize, @intCast(desired_channels));
         var len = pixels * bytes;
         var slice: []u8 = ptr[0..len];
         return slice;
@@ -96,8 +96,8 @@ pub fn load_from_memory(data: []const u8, x: *i32, y: *i32, channels_in_file: *i
     var ptr: [*]u8 = undefined;
     if (zimage_load_from_memory(data.ptr, data.len, x, y, channels_in_file, desired_channels, &ptr)) {
         if (x.* <= 0 and y.* <= 0) return null;
-        var pixels = @intCast(usize, x.*) * @intCast(usize, y.*);
-        var bytes = if (desired_channels == 0) @intCast(usize, channels_in_file.*) else @intCast(usize, desired_channels);
+        var pixels = @as(usize, @intCast(x.*)) * @as(usize, @intCast(y.*));
+        var bytes = if (desired_channels == 0) @as(usize, @intCast(channels_in_file.*)) else @as(usize, @intCast(desired_channels));
         var len = pixels * bytes;
         var slice: []u8 = ptr[0..len];
         return slice;

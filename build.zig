@@ -23,7 +23,7 @@ pub fn link(b: *Builder, exe: *std.build.LibExeObjStep, _opts: BuildOptions) *st
 
     const lib = buildLibrary(b, opts);
     exe.linkLibrary(lib);
-    
+
     return lib;
 }
 
@@ -43,8 +43,8 @@ pub fn buildLibrary(b: *Builder, opts: BuildOptions) *std.build.LibExeObjStep {
         relativePath(b, "deps/imgui/imgui_widgets.cpp"),
         relativePath(b, "deps/imgui/imgui_demo.cpp"),
         relativePath(b, "deps/stb/stb_image.c"),
-        }, &[_][]const u8{});
-    
+    }, &[_][]const u8{});
+
     if (opts.impl_opengl3) {
         // In OpenGL3, this is our texture id, let imgui know.
         lib.defineCMacro("ImTextureID", "unsigned int");
@@ -74,7 +74,7 @@ pub fn addBackendGlfwOpenGl3(b: *Builder, exe: *std.build.LibExeObjStep, opts: B
         relativePath(b, "deps/imgui/backends/imgui_impl_glfw.cpp"),
         relativePath(b, "deps/imgui/backends/imgui_impl_opengl3.cpp"),
         relativePath(b, "deps/glad/src/glad.c"),
-        }, &[_][]const u8{});
+    }, &[_][]const u8{});
 
     exe.addIncludePath(relativePath(b, "deps/imgui"));
     exe.addIncludePath(relativePath(b, "deps/glad/include"));
