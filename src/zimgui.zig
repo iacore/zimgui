@@ -890,7 +890,7 @@ const InputTextFlags = enum(u32) {
 //    - Using Stretch columns OFTEN DOES NOT MAKE SENSE if ScrollX is on, UNLESS you have specified a value for 'inner_width' in BeginTable().
 //      If you specify a value for 'inner_width' then effectively the scrolling space is known and Stretch or mixed Fixed/Stretch columns become meaningful again.
 // - Read on documentation at the top of imgui_tables.cpp for details.
-const TableFlags = enum(u32) {
+pub const TableFlags = enum(u32) {
     // Features
     None = 0,
     Resizable = 1 << 0, // Enable resizing columns.
@@ -937,7 +937,7 @@ const TableFlags = enum(u32) {
 };
 
 // Flags for ImGui::TableSetupColumn()
-const TableColumnFlags = enum(u32) {
+pub const TableColumnFlags = enum(u32) {
     // Input configuration flags
     None = 0,
     Disabled = 1 << 0, // Overriding/master disable flag: hide column, won't show in context menu (unlike calling TableSetColumnEnabled() which manipulates the user accessible state)
